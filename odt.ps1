@@ -103,27 +103,6 @@ if (-not (Test-Path $PathExeSetup)) {
     Start-Process $PathExePacked -ArgumentList "/extract:$( $PSScriptRoot ) /passive /quiet"
 }
 
-# User Interaction
-$ResultVisio = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Visio?'
-switch ($ResultVisio) {
-    0 {$Visio = "<Product ID=`"VisioProRetail`">
-    <Language ID=`"de-DE`" />
-    <ExcludeApp ID=`"Groove`" />
-    <ExcludeApp ID=`"Lync`" />
-    </Product>"} 
-    1 {$Visio = ""}
-}
-
-$ResultPublisher = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Publisher?'
-switch ($ResultPublisher) {
-    0 {$Publisher = "<Product ID=`"PublisherRetail`">
-    <Language ID=`"de-DE`" />
-    <ExcludeApp ID=`"Groove`" />
-    <ExcludeApp ID=`"Lync`" />
-  </Product>"}
-    1 {$Publisher = ""}
-}
-
 $ResultBit = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Office as 32-Bit version? ("No" = 64-Bit)'
 switch ($ResultBit) {
     0 {$Bit = "32"}
@@ -163,6 +142,26 @@ switch ($ResultUseAdmin) {
             1 {$Apps = "O365BusinessRetail"}
         }
     }
+}
+
+$ResultVisio = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Visio?'
+switch ($ResultVisio) {
+    0 {$Visio = "<Product ID=`"VisioProRetail`">
+    <Language ID=`"de-DE`" />
+    <ExcludeApp ID=`"Groove`" />
+    <ExcludeApp ID=`"Lync`" />
+    </Product>"} 
+    1 {$Visio = ""}
+}
+
+$ResultPublisher = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Publisher?'
+switch ($ResultPublisher) {
+    0 {$Publisher = "<Product ID=`"PublisherRetail`">
+    <Language ID=`"de-DE`" />
+    <ExcludeApp ID=`"Groove`" />
+    <ExcludeApp ID=`"Lync`" />
+  </Product>"}
+    1 {$Publisher = ""}
 }
 
 $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to show the installation progress? ("no" = silent install)'
