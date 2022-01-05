@@ -133,7 +133,7 @@ switch ($ResultBit) {
 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to provide the Office 365 Administrator Credentials and automatically check for available licenses in order to choose whether to install Apps for Business or Apps for Enterprise? ("no" = choose manually)'
 switch ($ResultUseAdmin) {
     0 {
-        # Connect-AzureAD
+        Connect-AzureAD
 
         $user = Get-AzureADUser | Select DisplayName, Mail, ProxyAddresses, UserPrincipalName 
         $user = $user | Out-GridView -PassThru -Title "Select the user whose license you mean to use."
