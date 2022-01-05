@@ -61,7 +61,7 @@ function Start-OfficeSetup {
         $Type
     )
 
-    Start-Process $Path -ArgumentList "/$( $Type ) $( $NameConfig)"
+    Start-Process $Path -ArgumentList "/$( $Type ) $( $NameConfig)" -Wait
 
     # $pinfo = New-Object System.Diagnostics.ProcessStartInfo
     # $pinfo.FileName = $Path
@@ -126,14 +126,14 @@ switch ($ResultPublisher) {
 
 $ResultBit = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Office as 32-Bit version? ("No" = 64-Bit)'
 switch ($ResultBit) {
-    0 {$Bit = "32"} 
+    0 {$Bit = "32"}
     1 {$Bit = "64"}
 }
 
 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to provide the Office 365 Administrator Credentials and automatically check for available licenses in order to choose whether to install Apps for Business or Apps for Enterprise? ("no" = choose manually)'
 switch ($ResultUseAdmin) {
     0 {
-        Connect-AzureAD
+        # Connect-AzureAD
 
         $user = Get-AzureADUser | Select DisplayName, Mail, ProxyAddresses, UserPrincipalName 
         $user = $user | Out-GridView -PassThru -Title "Select the user whose license you mean to use."
@@ -145,12 +145,15 @@ switch ($ResultUseAdmin) {
             if ($userLicense.ServicePlans.ServicePlanName -contains "OFFICE_BUSINESS") {
                 # Business Plan
                 $Apps = "O365BusinessRetail"
+                Write-Host "Found O365BusinessRetail."
             } elseif ($userLicense.ServicePlans.ServicePlanName -contains "OFFICESUBSCRIPTION") {
                 # Enterprise Plan
                 $Apps = "O365ProPlusRetail"
-            } else {
-                throw "Neither O365BusinessRetail nor O365ProPlusRetail found!"
+                Write-Host "Found O365ProPlusRetail."
             }
+        }
+        if (-not ($Apps)) {
+            throw "Neither O365BusinessRetail nor O365ProPlusRetail found!"
         }
     } 
     1 {
