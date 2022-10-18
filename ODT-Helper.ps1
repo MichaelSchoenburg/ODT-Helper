@@ -14,9 +14,6 @@
     General notes
 #>
 
-using namespace System.Management.Automation.Host
-
-
 function New-Menu {
     [CmdletBinding()]
     param(
@@ -36,11 +33,11 @@ function New-Menu {
         [ValidateNotNullOrEmpty()]
         [string]$ChoiceB
     )
-    
-    $a = [ChoiceDescription]::new("&$( $ChoiceA )", '')
-    $b = [ChoiceDescription]::new("&$( $ChoiceB )", '')
 
-    $options = [ChoiceDescription[]]($a, $b)
+    $a = New-Object System.Management.Automation.Host.ChoiceDescription "&$( $ChoiceA )", ''
+    $b = New-Object System.Management.Automation.Host.ChoiceDescription "&$( $ChoiceB )", ''
+
+    $options = [System.Management.Automation.Host.ChoiceDescription[]]($a, $b)
 
     $result = $host.ui.PromptForChoice($title, $question, $options, 0)
 
@@ -100,7 +97,9 @@ if (-not (Test-Path $PathExePacked)) {
 }
 
 if (-not (Test-Path $PathExeSetup)) {
-    Start-Process $PathExePacked -ArgumentList "/extract:$( $PSScriptRoot ) /passive /quiet"
+    $args = "/extract:`"$( $PSScriptRoot )`" /passive /quiet"
+    Write-Host "Args = $( $args )"
+    Start-Process $PathExePacked -ArgumentList $args
 }
 
 $ResultBit = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Office as 32-Bit version? ("No" = 64-Bit)'
