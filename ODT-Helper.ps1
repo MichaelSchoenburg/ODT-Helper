@@ -84,17 +84,31 @@ function Start-OfficeSetup {
 }
 
 $NameConfig = "config.xml"
-$DownloadUrl = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_14527-20178.exe"
+$DownloadUrl = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_15726-20202.exe"
 $PathConfig = "$( $PSScriptRoot )\$( $NameConfig )"
 $PathExePacked = "$( $PSScriptRoot )\officedeploymenttool_packed.exe"
 $PathExeSetup = "$( $PSScriptRoot )\setup.exe"
 
+Write-Host 'Testing if ODT has already been downloaded.'
 if (-not (Test-Path $PathExePacked)) {
+    Write-Host 'Downloading ODT...'
     $AllProtocols = [System.Net.SecurityProtocolType]'Tls11,Tls12'
     [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
-    $Client = New-Object System.Net.WebClient
-    $Client.DownloadFile($DownloadUrl, $PathExePacked)
+    
+    try {
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru
+    }
+    catch {
+        if( $_.Exception.Response.StatusCode.Value__ -eq 404 )
+        {
+            throw "Can't download ODT. 404 Not Found. Maybe URL isn't up-to-date anymore?"
+        }
+        else {
+            throw "Unknown error while downloading ODT."
+        }
+    }
 }
+Write-Host 'ODT downloaded.'
 
 if (-not (Test-Path $PathExeSetup)) {
     $args = "/extract:`"$( $PSScriptRoot )`" /passive /quiet"
