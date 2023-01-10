@@ -58,7 +58,8 @@ function Start-OfficeSetup {
         $Type
     )
 
-    Start-Process $Path -ArgumentList "/$( $Type ) $( $NameConfig)" -Wait
+    Write-Host "PathConfig = $( $PathConfig )"
+    Start-Process $Path -ArgumentList "/$( $Type ) $( $PathConfig)" -Wait
 
     # $pinfo = New-Object System.Diagnostics.ProcessStartInfo
     # $pinfo.FileName = $Path
@@ -83,11 +84,14 @@ function Start-OfficeSetup {
     # Write-Host "exit code: $( $p.ExitCode )"
 }
 
+$Path = "C:\TSD.CenterVision\Software\ODT"
 $NameConfig = "config.xml"
 $DownloadUrl = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_15726-20202.exe"
-$PathConfig = "$( $PSScriptRoot )\$( $NameConfig )"
-$PathExePacked = "$( $PSScriptRoot )\officedeploymenttool_packed.exe"
-$PathExeSetup = "$( $PSScriptRoot )\setup.exe"
+$PathConfig = "$( $Path )\$( $NameConfig )"
+$PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
+$PathExeSetup = "$( $Path )\setup.exe"
+
+New-Item -Path $Path -ItemType Directory
 
 Write-Host 'Testing if ODT has already been downloaded.'
 if (-not (Test-Path $PathExePacked)) {
@@ -96,7 +100,7 @@ if (-not (Test-Path $PathExePacked)) {
     [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
     
     try {
-        Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
     }
     catch {
         if( $_.Exception.Response.StatusCode.Value__ -eq 404 )
@@ -111,7 +115,7 @@ if (-not (Test-Path $PathExePacked)) {
 Write-Host 'ODT downloaded.'
 
 if (-not (Test-Path $PathExeSetup)) {
-    $args = "/extract:`"$( $PSScriptRoot )`" /passive /quiet"
+    $args = "/extract:`"$( $Path )`" /passive /quiet"
     Write-Host "Args = $( $args )"
     Start-Process $PathExePacked -ArgumentList $args
 }
