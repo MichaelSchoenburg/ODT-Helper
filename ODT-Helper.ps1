@@ -14,6 +14,37 @@
     General notes
 #>
 
+function Get-ODTUri {
+    <#
+        .SYNOPSIS
+            Get Download URL of latest Office 365 Deployment Tool (ODT).
+        .NOTES
+            Author: Bronson Magnan
+            Twitter: @cit_bronson
+            Modified by: Marco Hofmann
+            Twitter: @xenadmin
+            Source: https://www.meinekleinefarm.net/download-and-install-latest-office-365-deployment-tool-odt/
+        .LINK
+            https://www.meinekleinefarm.net/
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param ()
+
+    $url = "https://www.microsoft.com/en-us/download/confirmation.aspx?id=49117"
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
+    }
+    catch {
+        Throw "Failed to connect to ODT: $url with error $_."
+        Break
+    }
+    finally {
+        $ODTUri = $response.links | Where-Object {$_.outerHTML -like "*click here to download manually*"}
+        Write-Output $ODTUri.href
+    }
+}
+
 function New-Menu {
     [CmdletBinding()]
     param(
@@ -85,8 +116,8 @@ function Start-OfficeSetup {
 }
 
 $Path = "C:\TSD.CenterVision\Software\ODT"
+$DownloadUrl = Get-ODTUri
 $NameConfig = "config.xml"
-$DownloadUrl = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_15928-20216.exe"
 $PathConfig = "$( $Path )\$( $NameConfig )"
 $PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
 $PathExeSetup = "$( $Path )\setup.exe"
@@ -120,24 +151,29 @@ if (-not (Test-Path $PathExeSetup)) {
     Start-Process $PathExePacked -ArgumentList $args
 }
 
-$ResultBit = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Office as 32-Bit version? ("No" = 64-Bit)'
-switch ($ResultBit) {
-    0 {$Bit = "32"}
-    1 {$Bit = "64"}
-}
+# $ResultBit = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Office as 32-Bit version? ("No" = 64-Bit)'
+# switch ($ResultBit) {
+#     0 {$Bit = "32"}
+#     1 {$Bit = "64"}
+# }
+$Bit = "64"
 
 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to provide the Office 365 Administrator Credentials and automatically check for available licenses in order to choose whether to install Apps for Business or Apps for Enterprise? ("no" = choose manually)'
 switch ($ResultUseAdmin) {
     0 {
+        Write-Host -ForegroundColor Yellow "Please login with your own admin account."
         Connect-AzureAD
+        $Customers = Get-AzureADContract
+        $SelectedCustomer = $customers | Select-Object DisplayName, DefaultDomainName | Out-GridView -Title "Select the customer this installation is for." -PassThru
 
-        $user = Get-AzureADUser | Select DisplayName, Mail, ProxyAddresses, UserPrincipalName 
-        $user = $user | Out-GridView -PassThru -Title "Select the user whose license you mean to use."
+        Connect-AzureAD -TenantId $SelectedCustomer.DefaultDomainName
+        $user = Get-AzureADUser | Select-Object DisplayName, Mail, ProxyAddresses, UserPrincipalName
+        $user = $user | Out-GridView -Title "Select the user whose license you mean to use." -PassThru
         $userUPN = $user.UserPrincipalName
         $licensePlanList = Get-AzureADSubscribedSku
-        $userPlanList = Get-AzureADUser -ObjectID $userUPN | Select -ExpandProperty AssignedLicenses | Select SkuID 
-        $userPlanListTranlated = $licensePlanList.Where({$userPlanList.SkuID -contains $_.ObjectId.substring($_.ObjectId.length - 36, 36)})
-        foreach ($userLicense in $userPlanListTranlated) {
+        $userPlanList = Get-AzureADUser -ObjectID $userUPN | Select-Object -ExpandProperty AssignedLicenses | Select-Object SkuID 
+        $userPlanListTranslated = $licensePlanList.Where({$userPlanList.SkuID -contains $_.ObjectId.substring($_.ObjectId.length - 36, 36)})
+        foreach ($userLicense in $userPlanListTranslated) {
             if ($userLicense.ServicePlans.ServicePlanName -contains "OFFICE_BUSINESS") {
                 # Business Plan
                 $Apps = "O365BusinessRetail"
@@ -149,11 +185,11 @@ switch ($ResultUseAdmin) {
             }
         }
         if (-not ($Apps)) {
-            throw "Neither O365BusinessRetail nor O365ProPlusRetail found!"
+            throw "This user doesn't have a license for Microsoft Apps (neither business apps nor enterprise apps)! Aborting script."
         }
-    } 
+    }
     1 {
-        $ResultApps = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Pro Plus" -ChoiceB "Business" -Question 'Which Office do you mean to install?'
+        $ResultApps = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA 'Microsoft Apps for Enterprise (aka. "Pro Plus")' -ChoiceB "Microsoft Apps for Business" -Question 'Which Office do you mean to install?'
         switch ($ResultApps) {
             0 {$Apps = "O365ProPlusRetail"}
             1 {$Apps = "O365BusinessRetail"}
@@ -171,21 +207,23 @@ switch ($ResultVisio) {
     1 {$Visio = ""}
 }
 
-$ResultPublisher = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Publisher?'
-switch ($ResultPublisher) {
-    0 {$Publisher = "<Product ID=`"PublisherRetail`">
-    <Language ID=`"de-DE`" />
-    <ExcludeApp ID=`"Groove`" />
-    <ExcludeApp ID=`"Lync`" />
-  </Product>"}
-    1 {$Publisher = ""}
-}
+# $ResultPublisher = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Publisher?'
+# switch ($ResultPublisher) {
+#     0 {$Publisher = "<Product ID=`"PublisherRetail`">
+#     <Language ID=`"de-DE`" />
+#     <ExcludeApp ID=`"Groove`" />
+#     <ExcludeApp ID=`"Lync`" />
+#   </Product>"}
+#     1 {$Publisher = ""}
+# }
+$Publisher = ""
 
-$ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to show the installation progress? ("no" = silent install)'
-switch ($ResultDisplayLevel) {
-    0 {$DisplayLevel = "Full"}
-    1 {$DisplayLevel = "None"}
-}
+# $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to show the installation progress? ("no" = silent install)'
+# switch ($ResultDisplayLevel) {
+#     0 {$DisplayLevel = "Full"}
+#     1 {$DisplayLevel = "None"}
+# }
+$DisplayLevel = "Full"
 
 $ConfigFinal = "<Configuration>
   <Add OfficeClientEdition=`"$( $Bit )`" Channel=`"Current`">
