@@ -185,7 +185,7 @@ switch ($ResultUseAdmin) {
             }
         }
         if (-not ($Apps)) {
-            throw "This user doesn't have a license for Microsoft Apps (neither business apps nor enterprise apps)! Aborting script."
+            throw "This user doesn't have a license for Microsoft Apps (neither business apps nor enterprise apps)! Please assign a license containing Microsoft Apps. Aborting script."
         }
     }
     1 {
