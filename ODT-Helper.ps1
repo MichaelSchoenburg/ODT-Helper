@@ -31,7 +31,7 @@ function Get-ODTUri {
     [OutputType([string])]
     param ()
 
-    $url = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_16731-20398.exe"
+    $url = "https://www.microsoft.com/en-us/download/confirmation.aspx?id=49117"
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
     }
