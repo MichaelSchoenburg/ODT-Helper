@@ -122,9 +122,14 @@ $PathConfig = "$( $Path )\$( $NameConfig )"
 $PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
 $PathExeSetup = "$( $Path )\setup.exe"
 
-New-Item -Path $Path -ItemType Directory
+if (Test-Path -Path $Path) {
+    Write-Host -ForegroundColor Green "Directory for ODT exists already."
+} else {
+    Write-Host -ForegroundColor Gray "Creating Directory for ODT..."
+    New-Item -Path $Path -ItemType Directory
+}
 
-Write-Host 'Testing if ODT has already been downloaded.'
+Write-Host -ForegroundColor Gray 'Testing if ODT has already been downloaded...'
 if (-not (Test-Path $PathExePacked)) {
     Write-Host 'Downloading ODT...'
     $AllProtocols = [System.Net.SecurityProtocolType]'Tls11,Tls12'
@@ -143,7 +148,7 @@ if (-not (Test-Path $PathExePacked)) {
         }
     }
 }
-Write-Host 'ODT downloaded.'
+Write-Host -ForegroundColor Green 'ODT downloaded.'
 
 if (-not (Test-Path $PathExeSetup)) {
     $args = "/extract:`"$( $Path )`" /passive /quiet"
@@ -162,34 +167,56 @@ $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -Choi
 switch ($ResultUseAdmin) {
     0 {
         Write-Host -ForegroundColor Yellow "Please login with your own admin account."
-        Connect-AzureAD
-        $Customers = Get-AzureADContract
-        $SelectedCustomer = $customers | Select-Object DisplayName, DefaultDomainName | Out-GridView -Title "Select the customer this installation is for." -PassThru
-
-        Connect-AzureAD -TenantId $SelectedCustomer.DefaultDomainName
-        $user = Get-AzureADUser | Select-Object DisplayName, Mail, ProxyAddresses, UserPrincipalName
-        $user = $user | Out-GridView -Title "Select the user whose license you mean to use." -PassThru
-        $userUPN = $user.UserPrincipalName
-        $licensePlanList = Get-AzureADSubscribedSku
-        $userPlanList = Get-AzureADUser -ObjectID $userUPN | Select-Object -ExpandProperty AssignedLicenses | Select-Object SkuID 
-        $userPlanListTranslated = $licensePlanList.Where({$userPlanList.SkuID -contains $_.ObjectId.substring($_.ObjectId.length - 36, 36)})
-        foreach ($userLicense in $userPlanListTranslated) {
-            if ($userLicense.ServicePlans.ServicePlanName -contains "OFFICE_BUSINESS") {
-                # Business Plan
-                $Apps = "O365BusinessRetail"
-                Write-Host "Found O365BusinessRetail."
-            } elseif ($userLicense.ServicePlans.ServicePlanName -contains "OFFICESUBSCRIPTION") {
-                # Enterprise Plan
-                $Apps = "O365ProPlusRetail"
-                Write-Host "Found O365ProPlusRetail."
+        try {
+            if (Get-Module -Name AzureAD) {
+                Write-Host -ForegroundColor Gray "Module already imported".
+            } elseif (Get-Module -Name AzureAD -ListAvailable) {
+                Write-Host -ForegroundColor Gray "Module already installed".
+                Write-Host -ForegroundColor Gray "Importing Module..."
+                Import-Module -Name AzureAD
+            } else {
+                Write-Host -ForegroundColor Gray "Installing Module..."
+                Install-Module -Name AzureAD -Force -Scope CurrentUser
+                Write-Host -ForegroundColor Gray "Importing Module..."
+                Import-Module -Name AzureAD
             }
-        }
-        if (-not ($Apps)) {
-            throw "This user doesn't have a license for Microsoft Apps (neither business apps nor enterprise apps)! Please assign a license containing Microsoft Apps. Aborting script."
+            
+            Write-Host -ForegroundColor Gray "Connecting to Azure..."
+            Connect-AzureAD
+            $Customers = Get-AzureADContract
+            $SelectedCustomer = $customers | Select-Object DisplayName, DefaultDomainName | Out-GridView -Title "Select the customer this installation is for." -PassThru
+
+            Connect-AzureAD -TenantId $SelectedCustomer.DefaultDomainName
+            $user = Get-AzureADUser | Select-Object DisplayName, Mail, ProxyAddresses, UserPrincipalName
+            $user = $user | Out-GridView -Title "Select the user whose license you mean to use." -PassThru
+            $userUPN = $user.UserPrincipalName
+            $licensePlanList = Get-AzureADSubscribedSku
+            $userPlanList = Get-AzureADUser -ObjectID $userUPN | Select-Object -ExpandProperty AssignedLicenses | Select-Object SkuID 
+            $userPlanListTranslated = $licensePlanList.Where({$userPlanList.SkuID -contains $_.ObjectId.substring($_.ObjectId.length - 36, 36)})
+            foreach ($userLicense in $userPlanListTranslated) {
+                if ($userLicense.ServicePlans.ServicePlanName -contains "OFFICE_BUSINESS") {
+                    # Business Plan
+                    $Apps = "O365BusinessRetail"
+                    Write-Host "Found O365BusinessRetail."
+                } elseif ($userLicense.ServicePlans.ServicePlanName -contains "OFFICESUBSCRIPTION") {
+                    # Enterprise Plan
+                    $Apps = "O365ProPlusRetail"
+                    Write-Host "Found O365ProPlusRetail."
+                }
+            }
+            if (-not ($Apps)) {
+                throw "This user doesn't have a license for Microsoft Apps (neither business apps nor enterprise apps)! Please assign a license containing Microsoft Apps. Aborting script."
+            }
+        } catch {
+            $_.Exception.Message
+            throw "Etwas ist schief gegangen."
         }
     }
     1 {
-        $ResultApps = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA 'Microsoft Apps for Enterprise (aka. "Pro Plus")' -ChoiceB "Microsoft Apps for Business" -Question 'Which Office do you mean to install?'
+        $a = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Enterprise (aka. "Pro Plus")', ''
+        $b = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Business', ''
+        $options = [System.Management.Automation.Host.ChoiceDescription[]]($a, $b)
+        $ResultApps = $host.ui.PromptForChoice('Office Deployment Tool - Configuration', 'Which Office do you mean to install?', $options, 0)
         switch ($ResultApps) {
             0 {$Apps = "O365ProPlusRetail"}
             1 {$Apps = "O365BusinessRetail"}
