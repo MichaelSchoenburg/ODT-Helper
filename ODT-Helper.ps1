@@ -166,7 +166,7 @@ $Bit = "64"
 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to provide the Office 365 Administrator Credentials and automatically check for available licenses in order to choose whether to install Apps for Business or Apps for Enterprise? ("no" = choose manually)'
 switch ($ResultUseAdmin) {
     0 {
-        Write-Host -ForegroundColor Yellow "Please login with your own admin account."
+        Write-Host -ForegroundColor Yellow "Please log in with a global admin of the tenant in which the user is located."
         try {
             if (Get-Module -Name AzureAD) {
                 Write-Host -ForegroundColor Gray "Module already imported".
@@ -183,10 +183,6 @@ switch ($ResultUseAdmin) {
             
             Write-Host -ForegroundColor Gray "Connecting to Azure..."
             Connect-AzureAD
-            $Customers = Get-AzureADContract
-            $SelectedCustomer = $customers | Select-Object DisplayName, DefaultDomainName | Out-GridView -Title "Select the customer this installation is for." -PassThru
-
-            Connect-AzureAD -TenantId $SelectedCustomer.DefaultDomainName
             $user = Get-AzureADUser | Select-Object DisplayName, Mail, ProxyAddresses, UserPrincipalName
             $user = $user | Out-GridView -Title "Select the user whose license you mean to use." -PassThru
             $userUPN = $user.UserPrincipalName
