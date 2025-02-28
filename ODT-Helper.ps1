@@ -226,6 +226,8 @@ $Publisher = ""
 #     0 {$DisplayLevel = "Full"}
 #     1 {$DisplayLevel = "None"}
 # }
+
+# Always show installation progress
 $DisplayLevel = "Full"
 
 $ConfigFinal = "<Configuration>
