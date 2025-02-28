@@ -139,6 +139,8 @@ if (-not (Test-Path $PathExeSetup)) {
 #     0 {$Bit = "32"}
 #     1 {$Bit = "64"}
 # }
+
+# Always use 64-Bit
 $Bit = "64"
 
 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to provide the Office 365 Administrator Credentials and automatically check for available licenses in order to choose whether to install Apps for Business or Apps for Enterprise? ("no" = choose manually)'
