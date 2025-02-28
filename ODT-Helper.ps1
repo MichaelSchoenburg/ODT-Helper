@@ -31,7 +31,7 @@ function Get-ODTUri {
     [OutputType([string])]
     param ()
 
-    $url = "https://download.microsoft.com/download/2/7/A/27AF1BE6-DD20-4CB4-B154-EBAB8A7D4A7E/officedeploymenttool_18129-20158.exe" # Muss jedes Mal manuell aktualisiert werden
+    $url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117" # Muss jedes Mal manuell aktualisiert werden
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
     }
@@ -40,7 +40,7 @@ function Get-ODTUri {
         Break
     }
     finally {
-        $ODTUri = $response.links | Where-Object {$_.outerHTML -like "*click here to download manually*"}
+        $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # I modified this one to work with the current website
         Write-Output $ODTUri.href
     }
 }
