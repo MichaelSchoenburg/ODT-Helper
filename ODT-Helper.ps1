@@ -91,28 +91,6 @@ function Start-OfficeSetup {
 
     Write-Host "PathConfig = $( $PathConfig )"
     Start-Process $Path -ArgumentList "/$( $Type ) $( $PathConfig)" -Wait
-
-    # $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-    # $pinfo.FileName = $Path
-    # $pinfo.RedirectStandardError = $true
-    # $pinfo.RedirectStandardOutput = $true
-    # $pinfo.UseShellExecute = $false
-    # $Arguments = "/$( $Type ) $( $NameConfig)"
-    # $pinfo.Arguments = $Arguments
-    # $p = New-Object System.Diagnostics.Process
-    # $p.StartInfo = $pinfo
-    # $p.Start() | Out-Null
-    # $p.WaitForExit()
-    # $stdout = $p.StandardOutput.ReadToEnd()
-    # $stderr = $p.StandardError.ReadToEnd()
-    # Write-Host "stdout start ---------------------------------"
-    # Write-Host $stdout
-    # Write-Host "stdout end -----------------------------------"
-    # Write-Host "stderr start ---------------------------------"
-    # Write-Host $stderr
-    # Write-Host "stderr end -----------------------------------"
-    # Write-Host
-    # Write-Host "exit code: $( $p.ExitCode )"
 }
 
 $Path = "C:\TSD.CenterVision\Software\ODT"
