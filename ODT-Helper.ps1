@@ -310,7 +310,15 @@ $NameConfig = "config.xml"
 $PathConfig = "$( $Path )\$( $NameConfig )"
 $PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
 $PathExeSetup = "$( $Path )\setup.exe"
-$Licenses = Import-Csv -Path ".\Product names and service plan identifiers for licensing.csv" -Delimiter ',' -Encoding UTF8 # Source: https://learn.microsoft.com/en-us/entra/identity/users/licensing-service-plan-reference
+$Licenses = @(
+    [PSCustomObject]@{GUID='6fd2c87f-b296-42f0-b197-1e91e994b900'; Product_Display_Name='Microsoft 365 E3'; ServicePlanName='OFFICESUBSCRIPTION'},
+    [PSCustomObject]@{GUID='c42b9cae-ea4f-4ab7-9717-81576235ccac'; Product_Display_Name='Microsoft 365 Business Standard'; ServicePlanName='OFFICE_BUSINESS'},
+    [PSCustomObject]@{GUID='e212cbc7-0961-4c40-9825-01117710dcb1'; Product_Display_Name='Office 365 E1'; ServicePlanName='OFFICESUBSCRIPTION'},
+    [PSCustomObject]@{GUID='f245ecc8-75af-4f8e-b61f-27d8114de5f3'; Product_Display_Name='Office 365 E3'; ServicePlanName='OFFICESUBSCRIPTION'},
+    [PSCustomObject]@{GUID='c1ec4a95-1f05-45b3-a911-aa3fa01094f5'; Product_Display_Name='Office 365 E5'; ServicePlanName='OFFICESUBSCRIPTION'},
+    [PSCustomObject]@{GUID='9aaf7827-d63c-4b61-89c3-182f06f82e5c'; Product_Display_Name='Office 365 Business'; ServicePlanName='OFFICE_BUSINESS'},
+    [PSCustomObject]@{GUID='b1188c4c-1b36-4018-b48b-ee07604f6feb'; Product_Display_Name='Office 365 Business Premium'; ServicePlanName='OFFICE_BUSINESS'}
+) # Source: https://learn.microsoft.com/en-us/entra/identity/users/licensing-service-plan-reference
 
 # Beispiel für die Verwendung in einem RMM (z. B. Riverbird): folgende Variablen müssen während der Laufzeit gesetzt werden:
 # $Apps = "O365ProPlusRetail"
