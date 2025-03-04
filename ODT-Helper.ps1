@@ -32,22 +32,22 @@
 function Write-ConsoleLog {
     <#
     .SYNOPSIS
-    Logs an event to the console.
+    Protokolliert ein Ereignis in der Konsole.
     
     .DESCRIPTION
-    Writes text to the console with the current date (US format) in front of it.
+    Schreibt Text in die Konsole mit dem aktuellen Datum (US-Format) davor.
     
     .PARAMETER Text
-    Event/text to be outputted to the console.
+    Ereignis/Text, der in die Konsole ausgegeben werden soll.
     
     .EXAMPLE
-    Write-ConsoleLog -Text 'Subscript XYZ called.'
+    Write-ConsoleLog -Text 'Subscript XYZ aufgerufen.'
     
-    Long form
+    Lange Form
     .EXAMPLE
-    Log 'Subscript XYZ called.
+    Log 'Subscript XYZ aufgerufen.'
     
-    Short form
+    Kurze Form
     #>
     [alias('Log')]
     [CmdletBinding()]
@@ -58,23 +58,23 @@ function Write-ConsoleLog {
         $Text
     )
 
-    # Save current VerbosePreference
+    # Aktuelle VerbosePreference speichern
     $VerbosePreferenceBefore = $VerbosePreference
 
-    # Enable verbose output
+    # Verbose-Ausgabe aktivieren
     $VerbosePreference = 'Continue'
 
-    # Write verbose output
+    # Verbose-Ausgabe schreiben
     Write-Verbose "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
 
-    # Restore current VerbosePreference
+    # Aktuelle VerbosePreference wiederherstellen
     $VerbosePreference = $VerbosePreferenceBefore
 }
 
 function Get-ODTUri {
     <#
         .SYNOPSIS
-            Get Download URL of latest Office 365 Deployment Tool (ODT).
+            Ruft die Download-URL des neuesten Office 365 Deployment Tools (ODT) von der Microsoft-Webseite ab.
         .NOTES
             Author: Bronson Magnan
             Twitter: @cit_bronson
@@ -88,7 +88,7 @@ function Get-ODTUri {
     [OutputType([string])]
     param ()
 
-    $url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117" # Muss jedes Mal manuell aktualisiert werden
+    $url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
     }
