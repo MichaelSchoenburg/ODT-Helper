@@ -335,7 +335,6 @@ $Licenses = @(
 # Überprüfen, ob Microsoft Office bereits installiert ist
 if (Get-OfficeInstalled) {
     Log "Microsoft Office ist bereits installiert. Das Skript wird abgebrochen."
-    Break
     Exit 0
 }
 
