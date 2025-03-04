@@ -218,15 +218,14 @@ function Set-DenyShutdown {
         $null = New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoClose" -PropertyType DWORD -Value $int -Force
         
         # Explorer neu starten, da die Änderungen sonst möglicherweise nicht angewendet werden
-        Stop-Process -Name explorer -Force
+        Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
         # Start-Process -FilePath explorer.exe # Wurde bei mir nicht benötigt. Explorer kam von selbst wieder hoch. Dies hat nur ein unnötiges Explorer-Fenster geöffnet.
-        }
-        catch {
+    } catch {
         Log "Der Registrierungsschluessel zum Verhindern des Herunterfahrens konnte nicht eingestellt werden."
         $_.Exception.Message
         Exit 1
-        }
     }
+}
 
     function Get-OfficeInstalled {
         $officeInstalled = $false
