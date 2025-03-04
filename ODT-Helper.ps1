@@ -231,26 +231,26 @@ function Get-OfficeInstalled {
     $officeInstalled = $false
     
     <# 
-    Überprüfen der Registrierung auf Office-Installation
+        Überprüfen der Registrierung auf Office-Installation
     #>
 
     # Definieren der Registrierungspfade, um nach Office-Installationen zu suchen
     $officePaths = @(
-    "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
     )
 
     foreach ($path in $officePaths) {
         Get-ChildItem -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
             if ($_.GetValue("DisplayName") -match "Microsoft Office") {
-            $officeInstalled = $true
+                $officeInstalled = $true
             }
         }
     }
 
     <# 
-    Überprüfen von WMI/CIM auf Office-Installation
+        Überprüfen von WMI/CIM auf Office-Installation
     #>
 
     # Verwendung von Get-WmiObject
@@ -268,7 +268,7 @@ function Get-OfficeInstalled {
     }
 
     <# 
-    Fazit
+        Fazit
     #>
 
     if ($officeInstalled) {
