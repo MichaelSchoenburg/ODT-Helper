@@ -24,23 +24,52 @@
 
 
 #endregion INITIALIZATION
-#region DECLARATIONS
-<#
-    Declare local variables and global variables
-#>
-
-$Path = "C:\TSD.CenterVision\Software\ODT"
-$DownloadUrl = Get-ODTUri
-$NameConfig = "config.xml"
-$PathConfig = "$( $Path )\$( $NameConfig )"
-$PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
-$PathExeSetup = "$( $Path )\setup.exe"
-
-#endregion DECLARATIONS
 #region FUNCTIONS
 <# 
     Declare Functions
 #>
+
+function Write-ConsoleLog {
+    <#
+    .SYNOPSIS
+    Logs an event to the console.
+    
+    .DESCRIPTION
+    Writes text to the console with the current date (US format) in front of it.
+    
+    .PARAMETER Text
+    Event/text to be outputted to the console.
+    
+    .EXAMPLE
+    Write-ConsoleLog -Text 'Subscript XYZ called.'
+    
+    Long form
+    .EXAMPLE
+    Log 'Subscript XYZ called.
+    
+    Short form
+    #>
+    [alias('Log')]
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true,
+        Position = 0)]
+        [string]
+        $Text
+    )
+
+    # Save current VerbosePreference
+    $VerbosePreferenceBefore = $VerbosePreference
+
+    # Enable verbose output
+    $VerbosePreference = 'Continue'
+
+    # Write verbose output
+    Write-Verbose "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
+
+    # Restore current VerbosePreference
+    $VerbosePreference = $VerbosePreferenceBefore
+}
 
 function Get-ODTUri {
     <#
@@ -123,7 +152,7 @@ function Show-MessageWindow {
         $form.Width = 600
         $form.Height = 200
         $form.StartPosition = 'CenterScreen'
-        $form.FormBorderStyle = 'FixedDialog'
+        $form.FormBorderStyle = 'FixedDiaLog '
         $form.MaximizeBox = $false
         $form.MinimizeBox = $false
         $form.ControlBox = $true
@@ -251,15 +280,35 @@ function Start-OfficeSetup {
         $Type
     )
 
-    Write-Host "PathConfig = $( $PathConfig )"
+    Log "PathConfig = $( $PathConfig )"
     Start-Process $Path -ArgumentList "/$( $Type ) $( $PathConfig)" -Wait
 }
 
 #endregion FUNCTIONS
+#region DECLARATIONS
+<#
+    Declare local variables and global variables
+#>
+
+$Path = "C:\TSD.CenterVision\Software\ODT"
+$DownloadUrl = Get-ODTUri
+$NameConfig = "config.xml"
+$PathConfig = "$( $Path )\$( $NameConfig )"
+$PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
+$PathExeSetup = "$( $Path )\setup.exe"
+
+#endregion DECLARATIONS
 #region EXECUTION
 <# 
     Script entry point
 #>
+
+if (Get-OfficeInstalled) {
+    Log "Microsoft Office ist bereits installiert. `n" +
+        "Das Skript wird abgebrochen."
+    Break
+    Exit 0
+}
 
 Show-MessageWindow -Text "Bitte den Computer nicht ausschalten. `n" +
     "Es wird im Hintergrund von IT-Center Engels " +
@@ -269,70 +318,70 @@ Show-MessageWindow -Text "Bitte den Computer nicht ausschalten. `n" +
 Set-DenyShutdown -Active $true
 
 if (Test-Path -Path $Path) {
-    Write-Host -ForegroundColor Green "Directory for ODT exists already."
+    Log "Ordner für ODT existiert bereits."
 } else {
-    Write-Host -ForegroundColor Gray "Creating Directory for ODT..."
+    Log "Lege Ordner für ODT an..."
     New-Item -Path $Path -ItemType Directory
 }
 
-Write-Host -ForegroundColor Gray 'Testing if ODT has already been downloaded...'
+Log 'Teste, ob ODT bereits heruntergeladen wurde...'
 if (-not (Test-Path $PathExePacked)) {
-    Write-Host 'Downloading ODT...'
+    Log 'Lade ODT herunter...'
     $AllProtocols = [System.Net.SecurityProtocolType]'Tls11,Tls12'
     [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
     
     try {
         Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
+        Log 'ODT erfolgreich heruntergeladen...'
     }
     catch {
         if( $_.Exception.Response.StatusCode.Value__ -eq 404 )
         {
-            throw "Can't download ODT. 404 Not Found. Maybe URL isn't up-to-date anymore?"
+            throw "ODT kann nicht heruntergeladen werden. 404 Nicht gefunden. Vielleicht ist die URL nicht mehr aktuell?"
         }
         else {
-            throw "Unknown error while downloading ODT."
+            throw "Unbekannter Fehler beim Herunterladen von ODT."
         }
     }
+} else {
+    Log "ODT bereits heruntergeladen."
 }
-Write-Host -ForegroundColor Green 'ODT downloaded.'
 
 if (-not (Test-Path $PathExeSetup)) {
+    Log 'Entpacke ODT.'
     $args = "/extract:`"$( $Path )`" /passive /quiet"
-    Write-Host "Args = $( $args )"
+    Log "Args = $( $args )"
     Start-Process $PathExePacked -ArgumentList $args
 }
 
-# $ResultBit = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Office as 32-Bit version? ("No" = 64-Bit)'
-# switch ($ResultBit) {
-#     0 {$Bit = "32"}
-#     1 {$Bit = "64"}
-# }
+$ResultBit = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Möchten Sie Office als 64-Bit-Version installieren? ("Nein" = 32-Bit)'
+switch ($ResultBit) {
+    0 {$Bit = "64"}
+    1 {$Bit = "32"}
+}
 
-# Always use 64-Bit
-$Bit = "64"
-
-$ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to provide the Office 365 Administrator Credentials and automatically check for available licenses in order to choose whether to install Apps for Business or Apps for Enterprise? ("no" = choose manually)'
+$ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Möchten Sie die Office 365-Administratoranmeldeinformationen angeben und automatisch nach verfügbaren Lizenzen suchen, um auszuwählen, ob Apps for Business oder Apps for Enterprise installiert werden sollen? („nein“ = manuell auswählen)'
 switch ($ResultUseAdmin) {
     0 {
-        Write-Host -ForegroundColor Yellow "Please log in with a global admin of the tenant in which the user is located."
+        Log -ForegroundColor Yellow "Bitte melden Sie sich mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
         try {
             if (Get-Module -Name AzureAD) {
-                Write-Host -ForegroundColor Gray "Module already imported".
+                Log "Modul bereits importiert".
             } elseif (Get-Module -Name AzureAD -ListAvailable) {
-                Write-Host -ForegroundColor Gray "Module already installed".
-                Write-Host -ForegroundColor Gray "Importing Module..."
+                Log "Modul bereits installiert".
+                Log "Modul importieren..."
                 Import-Module -Name AzureAD
             } else {
-                Write-Host -ForegroundColor Gray "Installing Module..."
+                Log "Modul installieren..."
                 Install-Module -Name AzureAD -Force -Scope CurrentUser
-                Write-Host -ForegroundColor Gray "Importing Module..."
+                Log "Modul importieren..."
                 Import-Module -Name AzureAD
             }
             
-            Write-Host -ForegroundColor Gray "Connecting to Azure..."
+            Log "Herstellen einer Verbindung mit Azure..."
             Connect-AzureAD
             $user = Get-AzureADUser | Select-Object DisplayName, Mail, ProxyAddresses, UserPrincipalName
-            $user = $user | Out-GridView -Title "Select the user whose license you mean to use." -PassThru
+            $user = $user | Out-GridView -Title "Wählen Sie den Benutzer aus, dessen Lizenz Sie verwenden möchten." -PassThru
             $userUPN = $user.UserPrincipalName
             $licensePlanList = Get-AzureADSubscribedSku
             $userPlanList = Get-AzureADUser -ObjectID $userUPN | Select-Object -ExpandProperty AssignedLicenses | Select-Object SkuID 
@@ -341,26 +390,26 @@ switch ($ResultUseAdmin) {
                 if ($userLicense.ServicePlans.ServicePlanName -contains "OFFICE_BUSINESS") {
                     # Business Plan
                     $Apps = "O365BusinessRetail"
-                    Write-Host "Found O365BusinessRetail."
+                    Log "Found O365BusinessRetail."
                 } elseif ($userLicense.ServicePlans.ServicePlanName -contains "OFFICESUBSCRIPTION") {
                     # Enterprise Plan
                     $Apps = "O365ProPlusRetail"
-                    Write-Host "Found O365ProPlusRetail."
+                    Log "Found O365ProPlusRetail."
                 }
             }
             if (-not ($Apps)) {
-                throw "This user doesn't have a license for Microsoft Apps (neither business apps nor enterprise apps)! Please assign a license containing Microsoft Apps. Aborting script."
+                throw "Dieser Benutzer besitzt keine Lizenz für Microsoft Apps (weder Business-Apps noch Enterprise-Apps)! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthält. Skript wird abgebrochen."
             }
         } catch {
             $_.Exception.Message
-            throw "Etwas ist schief gegangen."
+            throw "Unbekannter Fehler."
         }
     }
     1 {
         $a = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Enterprise (aka. "Pro Plus")', ''
         $b = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Business', ''
         $options = [System.Management.Automation.Host.ChoiceDescription[]]($a, $b)
-        $ResultApps = $host.ui.PromptForChoice('Office Deployment Tool - Configuration', 'Which Office do you mean to install?', $options, 0)
+        $ResultApps = $host.ui.PromptForChoice('Office Deployment Tool - Konfiguration', 'Welches Office möchten Sie installieren?', $options, 0)
         switch ($ResultApps) {
             0 {$Apps = "O365ProPlusRetail"}
             1 {$Apps = "O365BusinessRetail"}
@@ -368,7 +417,7 @@ switch ($ResultUseAdmin) {
     }
 }
 
-$ResultVisio = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Visio?'
+$ResultVisio = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Möchten Sie Microsoft Visio installieren?'
 switch ($ResultVisio) {
     0 {$Visio = "<Product ID=`"VisioProRetail`">
     <Language ID=`"de-DE`" />
@@ -378,25 +427,21 @@ switch ($ResultVisio) {
     1 {$Visio = ""}
 }
 
-# $ResultPublisher = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to install Publisher?'
-# switch ($ResultPublisher) {
-#     0 {$Publisher = "<Product ID=`"PublisherRetail`">
-#     <Language ID=`"de-DE`" />
-#     <ExcludeApp ID=`"Groove`" />
-#     <ExcludeApp ID=`"Lync`" />
-#   </Product>"}
-#     1 {$Publisher = ""}
-# }
-$Publisher = ""
+$ResultPublisher = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Möchten Sie Microsoft Publisher installieren?'
+switch ($ResultPublisher) {
+    0 {$Publisher = "<Product ID=`"PublisherRetail`">
+    <Language ID=`"de-DE`" />
+    <ExcludeApp ID=`"Groove`" />
+    <ExcludeApp ID=`"Lync`" />
+  </Product>"}
+    1 {$Publisher = ""}
+}
 
-# $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Configuration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Do you want to show the installation progress? ("no" = silent install)'
-# switch ($ResultDisplayLevel) {
-#     0 {$DisplayLevel = "Full"}
-#     1 {$DisplayLevel = "None"}
-# }
-
-# Always show installation progress
-$DisplayLevel = "Full"
+$ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Möchten Sie den Installationsfortschritt anzeigen? ("no" = silent install)'
+switch ($ResultDisplayLevel) {
+    0 {$DisplayLevel = "Full"}
+    1 {$DisplayLevel = "None"}
+}
 
 $ConfigFinal = "<Configuration>
   <Add OfficeClientEdition=`"$( $Bit )`" Channel=`"Current`">
@@ -422,13 +467,13 @@ $ConfigFinal = "<Configuration>
   <Display Level=`"$( $DisplayLevel )`" AcceptEULA=`"TRUE`" />
 </Configuration>"
 
-Write-Host "Writing config file..."
+Log "Writing config file..."
 Set-Content -Path $PathConfig -Value $ConfigFinal
 
-Write-Host "Starting download..."
+Log "Starting download..."
 Start-OfficeSetup -Path $PathExeSetup -Type Download
 
-Write-Host "Starting installation..."
+Log "Starting installation..."
 Start-OfficeSetup -Path $PathExeSetup -Type Configure
 
 Set-DenyShutdown -Active $false
