@@ -364,15 +364,12 @@ if (-not (Test-Path $PathExePacked)) {
     [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
     
     try {
-        Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
+        $response = Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
         Log 'ODT erfolgreich heruntergeladen...'
-    }
-    catch {
-        if( $_.Exception.Response.StatusCode.Value__ -eq 404 )
-        {
+    } catch {
+        if( $_.Exception.Response.StatusCode.Value__ -eq 404 ) {
             throw "ODT kann nicht heruntergeladen werden. 404 Nicht gefunden. Vielleicht ist die URL nicht mehr aktuell?"
-        }
-        else {
+        } else {
             throw "Unbekannter Fehler beim Herunterladen von ODT."
         }
     }
