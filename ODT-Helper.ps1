@@ -302,7 +302,7 @@ function Start-OfficeSetup {
     Declare local variables and global variables
 #>
 
-$MaximumVariableCount = 8192 # Graph Module has more than 4096 variables
+$MaximumVariableCount = 8192 # Graph-Modul hat mehr als 4096 Variablen
 $Path = "C:\TSD.CenterVision\Software\ODT"
 $DownloadUrl = Get-ODTUri
 $NameConfig = "config.xml"
@@ -366,9 +366,12 @@ if (-not (Test-Path $PathExePacked)) {
         Log 'ODT erfolgreich heruntergeladen...'
     } catch {
         if( $_.Exception.Response.StatusCode.Value__ -eq 404 ) {
-            throw "ODT kann nicht heruntergeladen werden. 404 Nicht gefunden. Vielleicht ist die URL nicht mehr aktuell?"
+            Log "ODT kann nicht heruntergeladen werden. 404 Nicht gefunden. Vielleicht ist die URL nicht mehr aktuell?"
+            Exit 1
         } else {
-            throw "Unbekannter Fehler beim Herunterladen von ODT."
+            Log "Unbekannter Fehler beim Herunterladen des ODT. Response Code: $( $_.Exception.Response.StatusCode.Value__ ) Error:"
+            $_.Exception.Message
+            Exit 1
         }
     }
 } else {
