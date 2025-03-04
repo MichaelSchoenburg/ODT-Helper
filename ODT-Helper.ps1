@@ -321,11 +321,11 @@ $PathExeSetup = "$( $Path )\setup.exe"
 $Licenses = Import-Csv -Path ".\Product names and service plan identifiers for licensing.csv" -Delimiter ',' -Encoding UTF8 # Source: https://learn.microsoft.com/en-us/entra/identity/users/licensing-service-plan-reference
 
 # Beispiel für die Verwendung in einem RMM (z. B. Riverbird): folgende Variablen müssen während der Laufzeit gesetzt werden:
-$Apps = "O365ProPlusRetail"
-$ResultBit = "64"
-$ResultVisio = 0
-$ResultPublisher = 0
-$ResultDisplayLevel = 0
+# $Apps = "O365ProPlusRetail"
+# $ResultBit = "64"
+# $ResultVisio = 0
+# $ResultPublisher = 0
+# $ResultDisplayLevel = 0
 
 #endregion DECLARATIONS
 #region EXECUTION
@@ -334,11 +334,11 @@ $ResultDisplayLevel = 0
 #>
 
 # Überprüfen, ob Microsoft Office bereits installiert ist
-# if (Get-OfficeInstalled) {
-#     Log "Microsoft Office ist bereits installiert. Das Skript wird abgebrochen."
-#     Break
-#     Exit 0
-# }
+if (Get-OfficeInstalled) {
+    Log "Microsoft Office ist bereits installiert. Das Skript wird abgebrochen."
+    Break
+    Exit 0
+}
 
 # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
 Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
