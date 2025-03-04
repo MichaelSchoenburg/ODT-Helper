@@ -1,17 +1,45 @@
 <#
 .SYNOPSIS
-    Short description
+    ODT-Helper
 .DESCRIPTION
-    Long description
-.EXAMPLE
-    PS C:\> <example usage>
-    Explanation of what the example does
-.INPUTS
-    Inputs (if any)
-.OUTPUTS
-    Output (if any)
+    A helper script to download and install Microsoft Office 365 Deployment Tool (ODT) and install Office 365 Apps.
+.LINK
+    GitHub: https://github.com/MichaelSchoenburg/ODT-Helper
 .NOTES
-    General notes
+    Author: Michael Schönburg
+    Version: v1.0
+    Creation: 28.02.2025
+    Last Edit: 28.02.2025
+    
+    This projects code loosely follows the PowerShell Practice and Style guide, as well as Microsofts PowerShell scripting performance considerations.
+    Style guide: https://poshcode.gitbook.io/powershell-practice-and-style/
+    Performance Considerations: https://docs.microsoft.com/en-us/powershell/scripting/dev-cross-plat/performance/script-authoring-considerations?view=powershell-7.1
+#>
+
+#region INITIALIZATION
+<# 
+    Libraries, Modules, ...
+#>
+
+
+
+#endregion INITIALIZATION
+#region DECLARATIONS
+<#
+    Declare local variables and global variables
+#>
+
+$Path = "C:\TSD.CenterVision\Software\ODT"
+$DownloadUrl = Get-ODTUri
+$NameConfig = "config.xml"
+$PathConfig = "$( $Path )\$( $NameConfig )"
+$PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
+$PathExeSetup = "$( $Path )\setup.exe"
+
+#endregion DECLARATIONS
+#region FUNCTIONS
+<# 
+    Declare Functions
 #>
 
 function Get-ODTUri {
@@ -75,6 +103,140 @@ function New-Menu {
     return $result
 }
 
+function Show-MessageWindow {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string]
+        $Text
+    )
+    
+    begin {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+    }
+    
+    process {
+        # Neues Formular erzeugen
+        $form = New-Object System.Windows.Forms.Form
+        $form.Text = 'Wichtige Meldung'
+        $form.Width = 600
+        $form.Height = 200
+        $form.StartPosition = 'CenterScreen'
+        $form.FormBorderStyle = 'FixedDialog'
+        $form.MaximizeBox = $false
+        $form.MinimizeBox = $false
+        $form.ControlBox = $true
+        $form.Topmost = $true # Fenster bleibt im Vordergrund
+
+        # Label erstellen
+        $label = New-Object System.Windows.Forms.Label
+        $label.Text = $Text
+        $label.AutoSize = $true
+        $label.Location = New-Object System.Drawing.Point(20, 30)
+
+        # "OK"-Button erstellen
+        $button = New-Object System.Windows.Forms.Button
+        $button.Text = "OK"
+        $button.Width = 80
+        $button.Height = 30
+        $button.Location = New-Object System.Drawing.Point(250, 100)
+
+        # Click-Ereignis für den "OK"-Button definieren
+        $button.Add_Click({
+            $form.Close() # Fenster schließen
+        })
+
+        # Label und Button auf Formular platzieren
+        $form.Controls.Add($label)
+        $form.Controls.Add($button)
+
+        # Fenster anzeigen
+        $form.ShowDialog() | Out-Null
+    }
+    
+    end {
+        
+    }
+}
+
+function Set-DenyShutdown {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [System.Boolean]
+        $Active = $true
+    )
+    
+    switch ($Active) {
+        $true { $int = 1 }
+        $false { $int = 0 }
+    }
+
+    try {
+        # Set the registry key to deny shutdown
+        New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoClose" -PropertyType DWORD -Value $int -Force
+        
+        # Restart explorer since the changes might not be applied elsewise
+        Stop-Process -Name explorer -Force
+        Start-Process -Name explorer -Force
+    }
+    catch {
+        throw "Failed to set registry key to deny shutdown."
+    }
+}
+
+function Get-OfficeInstalled {
+    $officeInstalled = $false
+    
+    <# 
+        Check Registry for Office installation
+    #>
+
+    # Define the registry paths to check for Office installations
+    $officePaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+    )
+
+    foreach ($path in $officePaths) {
+        Get-ChildItem -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.GetValue("DisplayName") -match "Microsoft Office") {
+                $officeInstalled = $true
+            }
+        }
+    }
+
+    <# 
+        Check WMI/CIM for Office installation
+    #>
+
+    # Using Get-WmiObject
+    $wmi = Get-WmiObject -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Office%'" 2>$null
+
+    if ($wmi) {
+        $officeInstalled = $true
+    }
+
+    # Alternatively, using Get-CimInstance for more modern systems
+    $cim = Get-CimInstance -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Office%'"
+
+    if ($cim) {
+        $officeInstalled = $true
+    }
+
+    <# 
+        Conclusion
+    #>
+
+    if ($officeInstalled) {
+        return $true
+    } else {
+        return $false
+    }
+}
+
 function Start-OfficeSetup {
     [CmdletBinding()]
     param (
@@ -93,12 +255,18 @@ function Start-OfficeSetup {
     Start-Process $Path -ArgumentList "/$( $Type ) $( $PathConfig)" -Wait
 }
 
-$Path = "C:\TSD.CenterVision\Software\ODT"
-$DownloadUrl = Get-ODTUri
-$NameConfig = "config.xml"
-$PathConfig = "$( $Path )\$( $NameConfig )"
-$PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
-$PathExeSetup = "$( $Path )\setup.exe"
+#endregion FUNCTIONS
+#region EXECUTION
+<# 
+    Script entry point
+#>
+
+Show-MessageWindow -Text "Bitte den Computer nicht ausschalten. `n" +
+    "Es wird im Hintergrund von IT-Center Engels " +
+    "Microsoft Office und Microsoft Teams installiert. `n" +
+    "Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
+
+Set-DenyShutdown -Active $true
 
 if (Test-Path -Path $Path) {
     Write-Host -ForegroundColor Green "Directory for ODT exists already."
@@ -262,3 +430,10 @@ Start-OfficeSetup -Path $PathExeSetup -Type Download
 
 Write-Host "Starting installation..."
 Start-OfficeSetup -Path $PathExeSetup -Type Configure
+
+Set-DenyShutdown -Active $false
+
+Show-MessageWindow -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. `n" +
+    "Ab jetzt können Sie auch wieder den Computer ausschalten."
+
+#endregion EXECUTION
