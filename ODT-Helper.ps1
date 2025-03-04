@@ -93,12 +93,17 @@ function Get-ODTUri {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
     }
     catch {
-        Throw "Failed to connect to ODT: $url with error $_."
-        Break
+        Throw "Fehler beim Abrufen der URL $($url) für den Download des ODT mit folgendem Fehler:"
+        $_.Exception.Message
+        Exit 1
     }
-    finally {
+    try {
         $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # I modified this one to work with the current website
         Write-Output $ODTUri.href
+    } catch {
+        Throw "Fehler beim Extrahieren der Download-URL von der Microsoft-Webseite für das ODT. Fehler:"
+        $_.Exception.Message
+        Exit 1
     }
 }
 
@@ -132,7 +137,7 @@ function New-Menu {
     return $result
 }
 
-function Show-MessageWindow {
+function Show-MessageWindowAsync {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -141,51 +146,65 @@ function Show-MessageWindow {
     )
     
     begin {
-        Add-Type -AssemblyName System.Windows.Forms
-        Add-Type -AssemblyName System.Drawing
+
     }
     
     process {
-        # Neues Formular erzeugen
-        $form = New-Object System.Windows.Forms.Form
-        $form.Text = 'Wichtige Meldung'
-        $form.Width = 600
-        $form.Height = 200
-        $form.StartPosition = 'CenterScreen'
-        $form.FormBorderStyle = 'FixedDiaLog '
-        $form.MaximizeBox = $false
-        $form.MinimizeBox = $false
-        $form.ControlBox = $true
-        $form.Topmost = $true # Fenster bleibt im Vordergrund
+        $scriptBlock = {
+            param($Msg)
+        
+            # Laden der benötigten .NET-Assemblies
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+        
+            # Neues Formular erzeugen
+            $form = New-Object System.Windows.Forms.Form
+            $form.Text = 'Wichtige Meldung'
+            $form.Width = 600
+            $form.Height = 200
+            $form.StartPosition = 'CenterScreen'
+            $form.FormBorderStyle = 'FixedDialog'
+            $form.MaximizeBox = $false
+            $form.MinimizeBox = $false
+            $form.ControlBox = $true
+            $form.Topmost = $true
+        
+            # Label erstellen
+            $label = New-Object System.Windows.Forms.Label
+            $label.Text = $Msg
+            $label.AutoSize = $true
+            $label.Location = New-Object System.Drawing.Point(20, 30)
+        
+            # "OK"-Button erstellen
+            $button = New-Object System.Windows.Forms.Button
+            $button.Text = "OK"
+            $button.Width = 80
+            $button.Height = 30
+            $button.Location = New-Object System.Drawing.Point(250, 100)
 
-        # Label erstellen
-        $label = New-Object System.Windows.Forms.Label
-        $label.Text = $Text
-        $label.AutoSize = $true
-        $label.Location = New-Object System.Drawing.Point(20, 30)
-
-        # "OK"-Button erstellen
-        $button = New-Object System.Windows.Forms.Button
-        $button.Text = "OK"
-        $button.Width = 80
-        $button.Height = 30
-        $button.Location = New-Object System.Drawing.Point(250, 100)
-
-        # Click-Ereignis für den "OK"-Button definieren
-        $button.Add_Click({
-            $form.Close() # Fenster schließen
-        })
-
-        # Label und Button auf Formular platzieren
-        $form.Controls.Add($label)
-        $form.Controls.Add($button)
-
-        # Fenster anzeigen
-        $form.ShowDialog() | Out-Null
+            # Click-Ereignis für den "OK"-Button definieren
+            $button.Add_Click({
+                $form.Close()
+            })
+        
+            # Label und Button auf Formular platzieren
+            $form.Controls.Add($label)
+            $form.Controls.Add($button)
+        
+            # Fenster modal anzeigen, aber in EIGENEM Runspace (blockiert daher dein Hauptskript NICHT)
+            $form.ShowDialog() | Out-Null
+        }
+        
+        # Neuen PowerShell-Runspace erstellen, ScriptBlock hineinschicken und asynchron starten
+        $ps = [PowerShell]::Create()
+        $null = $ps.AddScript($scriptBlock)
+        $null = $ps.AddArgument($Text)
+        $asyncHandle = $ps.BeginInvoke()
+        # Das Skript läuft hier direkt weiter, während das Fenster schon angezeigt wird.
     }
     
     end {
-        
+
     }
 }
 
@@ -204,7 +223,7 @@ function Set-DenyShutdown {
 
     try {
         # Setze den Registrierungsschlüssel, um das Herunterfahren zu verhindern
-        New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoClose" -PropertyType DWORD -Value $int -Force
+        $null = New-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoClose" -PropertyType DWORD -Value $int -Force
         
         # Explorer neu starten, da die Änderungen sonst möglicherweise nicht angewendet werden
         Stop-Process -Name explorer -Force
@@ -301,6 +320,13 @@ $PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
 $PathExeSetup = "$( $Path )\setup.exe"
 $Licenses = Import-Csv -Path ".\Product names and service plan identifiers for licensing.csv" -Delimiter ',' -Encoding UTF8 # Source: https://learn.microsoft.com/en-us/entra/identity/users/licensing-service-plan-reference
 
+# Beispiel für die Verwendung in einem RMM (z. B. Riverbird): folgende Variablen müssen während der Laufzeit gesetzt werden:
+$Apps = "O365ProPlusRetail"
+$ResultBit = "64"
+$ResultVisio = 0
+$ResultPublisher = 0
+$ResultDisplayLevel = 0
+
 #endregion DECLARATIONS
 #region EXECUTION
 <# 
@@ -308,15 +334,14 @@ $Licenses = Import-Csv -Path ".\Product names and service plan identifiers for l
 #>
 
 # Überprüfen, ob Microsoft Office bereits installiert ist
-if (Get-OfficeInstalled) {
-    Log "Microsoft Office ist bereits installiert. `n" +
-        "Das Skript wird abgebrochen."
-    Break
-    Exit 0
-}
+# if (Get-OfficeInstalled) {
+#     Log "Microsoft Office ist bereits installiert. Das Skript wird abgebrochen."
+#     Break
+#     Exit 0
+# }
 
 # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
-Show-MessageWindow -Text "Bitte den Computer nicht ausschalten.
+Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
 Es wird im Hintergrund von IT-Center Engels
 Microsoft Office und Microsoft Teams installiert
 Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
@@ -324,12 +349,12 @@ Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
 Set-DenyShutdown -Active $true
 
 # Überprüfen, ob der ODT-Ordner existiert
-if (Test-Path -Path $Path) {
-    Log "Ordner fuer ODT existiert bereits."
-} else {
-    Log "Lege Ordner fuer ODT an..."
-    New-Item -Path $Path -ItemType Directory
-}
+# if (Test-Path -Path $Path) {
+#     Log "Ordner fuer ODT existiert bereits."
+# } else {
+#     Log "Lege Ordner fuer ODT an..."
+#     New-Item -Path $Path -ItemType Directory
+# }
 
 # Überprüfen, ob ODT bereits heruntergeladen wurde, falls nicht, herunterladen
 Log 'Teste, ob ODT bereits heruntergeladen wurde...'
@@ -361,9 +386,11 @@ if (-not (Test-Path $PathExeSetup)) {
     $args = "/extract:`"$( $Path )`" /passive /quiet"
     Log "Args = $( $args )"
     Start-Process $PathExePacked -ArgumentList $args
+} else {
+    Log "ODT bereits entpackt."
 }
 
-if (!$Apps) {
+if ($null -eq $Apps) {
     $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie die Office 365-Administratoranmeldeinformationen angeben und automatisch nach verfuegbaren Lizenzen suchen, um auszuwaehlen, ob Apps for Business oder Apps for Enterprise installiert werden sollen? („nein“ = manuell auswaehlen)'
     switch ($ResultUseAdmin) {
         0 {
@@ -436,17 +463,21 @@ if (!$Apps) {
             }
         }
     }
+} else {
+    Log 'Variable "Apps" durch RMM bereits gesetzt.'
 }
 
-if (!$ResultBit) {
+if ($null -eq $ResultBit) {
     $ResultBit = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Office als 64-Bit-Version installieren? ("Nein" = 32-Bit)'
     switch ($ResultBit) {
         0 {$Bit = "64"}
         1 {$Bit = "32"}
     }
+} else {
+    Log 'Variable "ResultBit" durch RMM bereits gesetzt.'
 }
 
-if (!$ResultVisio) {
+if ($null -eq $ResultVisio) {
     $ResultVisio = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Visio installieren?'
     switch ($ResultVisio) {
         0 {$Visio = "<Product ID=`"VisioProRetail`">
@@ -456,9 +487,11 @@ if (!$ResultVisio) {
         </Product>"} 
         1 {$Visio = ""}
     }
+} else {
+    Log 'Variable "ResultVisio" durch RMM bereits gesetzt.'
 }
 
-if (!$ResultPublisher) {
+if ($null -eq $ResultPublisher) {
     $ResultPublisher = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Publisher installieren?'
     switch ($ResultPublisher) {
         0 {$Publisher = "<Product ID=`"PublisherRetail`">
@@ -468,14 +501,18 @@ if (!$ResultPublisher) {
     </Product>"}
         1 {$Publisher = ""}
     }
+} else {
+    Log 'Variable "ResultPublisher" durch RMM bereits gesetzt.'
 }
 
-if (!$ResultDisplayLevel) {
+if ($null -eq $ResultDisplayLevel) {
     $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie den Installationsfortschritt anzeigen? ("no" = silent install)'
     switch ($ResultDisplayLevel) {
         0 {$DisplayLevel = "Full"}
         1 {$DisplayLevel = "None"}
     }
+} else {
+    Log 'Variable "ResultDisplayLevel" durch RMM bereits gesetzt.'
 }
 
 $ConfigFinal = "<Configuration>
@@ -502,18 +539,17 @@ $ConfigFinal = "<Configuration>
   <Display Level=`"$( $DisplayLevel )`" AcceptEULA=`"TRUE`" />
 </Configuration>"
 
-Log "Writing config file..."
+Log "Schreibe Konfigurationsdatei..."
 Set-Content -Path $PathConfig -Value $ConfigFinal
 
-Log "Starting download..."
+Log "Starte Download..."
 Start-OfficeSetup -Path $PathExeSetup -Type Download
 
-Log "Starting installation..."
+Log "Starte Installation..."
 Start-OfficeSetup -Path $PathExeSetup -Type Configure
 
 Set-DenyShutdown -Active $false
 
-Show-MessageWindow -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. `n" +
-    "Ab jetzt koennen Sie auch wieder den Computer ausschalten."
+Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
 
 #endregion EXECUTION
