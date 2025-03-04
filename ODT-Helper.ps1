@@ -290,12 +290,14 @@ function Start-OfficeSetup {
     Declare local variables and global variables
 #>
 
+$MaximumVariableCount = 8192 # Graph Module has more than 4096 variables
 $Path = "C:\TSD.CenterVision\Software\ODT"
 $DownloadUrl = Get-ODTUri
 $NameConfig = "config.xml"
 $PathConfig = "$( $Path )\$( $NameConfig )"
 $PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
 $PathExeSetup = "$( $Path )\setup.exe"
+$Licenses = Import-Csv -Path "C:\Users\mschoenburg\Downloads\Product names and service plan identifiers for licensing.csv" -Delimiter ',' -Encoding UTF8
 
 #endregion DECLARATIONS
 #region EXECUTION
@@ -363,46 +365,62 @@ switch ($ResultBit) {
 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Möchten Sie die Office 365-Administratoranmeldeinformationen angeben und automatisch nach verfügbaren Lizenzen suchen, um auszuwählen, ob Apps for Business oder Apps for Enterprise installiert werden sollen? („nein“ = manuell auswählen)'
 switch ($ResultUseAdmin) {
     0 {
-        Log -ForegroundColor Yellow "Bitte melden Sie sich mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
         try {
-            if (Get-Module -Name AzureAD) {
-                Log "Modul bereits importiert".
-            } elseif (Get-Module -Name AzureAD -ListAvailable) {
-                Log "Modul bereits installiert".
+            if (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users) {
+                Log "Modul bereits importiert."
+            } elseif (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users -ListAvailable) {
+                Log "Modul bereits installiert."
                 Log "Modul importieren..."
-                Import-Module -Name AzureAD
+                Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
             } else {
                 Log "Modul installieren..."
-                Install-Module -Name AzureAD -Force -Scope CurrentUser
+                Install-Module -Name Microsoft.Graph -Force -Scope CurrentUser
                 Log "Modul importieren..."
-                Import-Module -Name AzureAD
+                Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
             }
             
             Log "Herstellen einer Verbindung mit Azure..."
-            Connect-AzureAD
-            $user = Get-AzureADUser | Select-Object DisplayName, Mail, ProxyAddresses, UserPrincipalName
-            $user = $user | Out-GridView -Title "Wählen Sie den Benutzer aus, dessen Lizenz Sie verwenden möchten." -PassThru
-            $userUPN = $user.UserPrincipalName
-            $licensePlanList = Get-AzureADSubscribedSku
-            $userPlanList = Get-AzureADUser -ObjectID $userUPN | Select-Object -ExpandProperty AssignedLicenses | Select-Object SkuID 
-            $userPlanListTranslated = $licensePlanList.Where({$userPlanList.SkuID -contains $_.ObjectId.substring($_.ObjectId.length - 36, 36)})
-            foreach ($userLicense in $userPlanListTranslated) {
-                if ($userLicense.ServicePlans.ServicePlanName -contains "OFFICE_BUSINESS") {
+            Log "Bitte melden Sie sich im folgenden mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
+            $null = Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All" -NoWelcome
+
+            $Properties = 'DisplayName', 'AssignedLicenses', 'DisplayName', 'Givenname', 'Surname', 'UserPrincipalName', 'OnPremisesSamAccountName'
+            $users = Get-MgUser -All -Filter 'accountEnabled eq true' -Property $Properties | 
+                Sort-Object -Property DisplayName | 
+                Select-Object @{Name = 'Lizenzierung'; Expression = {foreach ($l in $_.AssignedLicenses) {
+                        $Licenses.Where({$_.GUID -eq $l.SkuId})[0].Product_Display_Name
+                    }}}, 
+                    DisplayName, Givenname, Surname, UserPrincipalName, OnPremisesSamAccountName, AssignedLicenses
+            
+            $user = $users | Out-GridView -Title "Wählen Sie den Benutzer aus, dessen Lizenz Sie verwenden möchten." -PassThru
+            $licensePlanList = Get-MgSubscribedSku
+
+            if (-not ($user.AssignedLicenses)) {
+                Log "Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthält. Skript wird abgebrochen."
+                Exit 1
+            }
+
+            foreach ($license in $user.AssignedLicenses) {
+                $ServicePlanNames = $licensePlanList.Where({$_.SkuId -eq $license.SkuId}).ServicePlans.ServicePlanName
+                if ($ServicePlanNames -contains "OFFICE_BUSINESS") {
                     # Business Plan
                     $Apps = "O365BusinessRetail"
                     Log "Found O365BusinessRetail."
-                } elseif ($userLicense.ServicePlans.ServicePlanName -contains "OFFICESUBSCRIPTION") {
+                } elseif ($ServicePlanNames -contains "OFFICESUBSCRIPTION") {
                     # Enterprise Plan
                     $Apps = "O365ProPlusRetail"
                     Log "Found O365ProPlusRetail."
                 }
             }
             if (-not ($Apps)) {
-                throw "Dieser Benutzer besitzt keine Lizenz für Microsoft Apps (weder Business-Apps noch Enterprise-Apps)! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthält. Skript wird abgebrochen."
+                Log "Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthält. Skript wird abgebrochen."
+                Exit 1
             }
         } catch {
+            Log "Unbekannter Fehler."
             $_.Exception.Message
-            throw "Unbekannter Fehler."
+            Exit 1
+        } finally {
+            $null = Disconnect-MgGraph
         }
     }
     1 {
