@@ -91,12 +91,12 @@ function Get-ODTUri {
     $url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
-    }
-    catch {
+    } catch {
         Throw "Fehler beim Abrufen der URL $($url) für den Download des ODT mit folgendem Fehler:"
         $_.Exception.Message
         Exit 1
     }
+    
     try {
         $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # I modified this one to work with the current website
         Write-Output $ODTUri.href
