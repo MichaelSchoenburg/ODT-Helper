@@ -96,7 +96,7 @@ function Get-ODTUri {
         $_.Exception.Message
         Exit 1
     }
-    
+
     try {
         $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # I modified this one to work with the current website
         Write-Output $ODTUri.href
@@ -144,10 +144,6 @@ function Show-MessageWindowAsync {
         [string]
         $Text
     )
-    
-    begin {
-
-    }
     
     process {
         $scriptBlock = {
@@ -201,10 +197,6 @@ function Show-MessageWindowAsync {
         $null = $ps.AddArgument($Text)
         $asyncHandle = $ps.BeginInvoke()
         # Das Skript läuft hier direkt weiter, während das Fenster schon angezeigt wird.
-    }
-    
-    end {
-
     }
 }
 
