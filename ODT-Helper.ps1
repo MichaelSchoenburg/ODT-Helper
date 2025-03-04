@@ -227,51 +227,51 @@ function Set-DenyShutdown {
     }
 }
 
-    function Get-OfficeInstalled {
-        $officeInstalled = $false
-        
-        <# 
-        Überprüfen der Registrierung auf Office-Installation
-        #>
+function Get-OfficeInstalled {
+    $officeInstalled = $false
+    
+    <# 
+    Überprüfen der Registrierung auf Office-Installation
+    #>
 
-        # Definieren der Registrierungspfade, um nach Office-Installationen zu suchen
-        $officePaths = @(
-        "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-        )
+    # Definieren der Registrierungspfade, um nach Office-Installationen zu suchen
+    $officePaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration",
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+    )
 
-        foreach ($path in $officePaths) {
+    foreach ($path in $officePaths) {
         Get-ChildItem -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
             if ($_.GetValue("DisplayName") -match "Microsoft Office") {
             $officeInstalled = $true
             }
         }
-        }
+    }
 
-        <# 
-        Überprüfen von WMI/CIM auf Office-Installation
-        #>
+    <# 
+    Überprüfen von WMI/CIM auf Office-Installation
+    #>
 
-        # Verwendung von Get-WmiObject
-        $wmi = Get-WmiObject -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Office%'" 2>$null
+    # Verwendung von Get-WmiObject
+    $wmi = Get-WmiObject -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Office%'" 2>$null
 
-        if ($wmi) {
+    if ($wmi) {
         $officeInstalled = $true
-        }
+    }
 
-        # Alternativ, Verwendung von Get-CimInstance für modernere Systeme
-        $cim = Get-CimInstance -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Office%'"
+    # Alternativ, Verwendung von Get-CimInstance für modernere Systeme
+    $cim = Get-CimInstance -Query "SELECT * FROM Win32_Product WHERE Name LIKE '%Office%'"
 
-        if ($cim) {
+    if ($cim) {
         $officeInstalled = $true
-        }
+    }
 
-        <# 
-        Fazit
-        #>
+    <# 
+    Fazit
+    #>
 
-        if ($officeInstalled) {
+    if ($officeInstalled) {
         return $true
     } else {
         return $false
