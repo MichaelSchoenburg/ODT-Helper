@@ -59,16 +59,17 @@ function Write-ConsoleLog {
     )
 
     # Aktuelle VerbosePreference speichern
-    $VerbosePreferenceBefore = $VerbosePreference
+    # $VerbosePreferenceBefore = $VerbosePreference
 
     # Verbose-Ausgabe aktivieren
-    $VerbosePreference = 'Continue'
+    # $VerbosePreference = 'Continue'
 
     # Verbose-Ausgabe schreiben
-    Write-Verbose "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
+    # Write-Verbose "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
+    Write-Output "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
 
     # Aktuelle VerbosePreference wiederherstellen
-    $VerbosePreference = $VerbosePreferenceBefore
+    # $VerbosePreference = $VerbosePreferenceBefore
 }
 
 function Get-ODTUri {
@@ -99,7 +100,7 @@ function Get-ODTUri {
 
     try {
         $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # I modified this one to work with the current website
-        Write-Output $ODTUri.href
+        Log $ODTUri.href
     } catch {
         Throw "Fehler beim Extrahieren der Download-URL von der Microsoft-Webseite für das ODT. Fehler:"
         $_.Exception.Message
