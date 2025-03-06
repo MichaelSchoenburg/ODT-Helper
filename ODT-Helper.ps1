@@ -342,10 +342,10 @@ if (Get-OfficeInstalled) {
 }
 
 # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
-Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
-Es wird im Hintergrund von IT-Center Engels
-Microsoft Office und Microsoft Teams installiert
-Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
+# Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
+# Es wird im Hintergrund von IT-Center Engels
+# Microsoft Office und Microsoft Teams installiert
+# Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
 
 Log "Verhindere Herunterfahren des Computers..."
 Set-DenyShutdown -Active $true
@@ -553,6 +553,6 @@ Start-OfficeSetup -Path $PathExeSetup -Type Configure
 
 Set-DenyShutdown -Active $false
 
-Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
+# Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
 
 #endregion EXECUTION
