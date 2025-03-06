@@ -337,6 +337,8 @@ $Licenses = @(
 if (Get-OfficeInstalled) {
     Log "Microsoft Office ist bereits installiert. Das Skript wird abgebrochen."
     Exit 0
+} else {
+    Log "Microsoft Office ist noch nicht installiert. Das Skript wird fortgesetzt."
 }
 
 # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
@@ -345,15 +347,17 @@ Es wird im Hintergrund von IT-Center Engels
 Microsoft Office und Microsoft Teams installiert
 Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
 
+Log "Verhindere Herunterfahren des Computers..."
 Set-DenyShutdown -Active $true
 
 # Überprüfen, ob der ODT-Ordner existiert
-# if (Test-Path -Path $Path) {
-#     Log "Ordner fuer ODT existiert bereits."
-# } else {
-#     Log "Lege Ordner fuer ODT an..."
-#     New-Item -Path $Path -ItemType Directory
-# }
+Log "Überprüfen, ob der ODT-Ordner existiert..."
+if (Test-Path -Path $Path) {
+    Log "Ordner fuer ODT existiert bereits."
+} else {
+    Log "Lege Ordner fuer ODT an..."
+    New-Item -Path $Path -ItemType Directory
+}
 
 # Überprüfen, ob ODT bereits heruntergeladen wurde, falls nicht, herunterladen
 Log 'Teste, ob ODT bereits heruntergeladen wurde...'
