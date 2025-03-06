@@ -91,9 +91,13 @@ function Get-ODTUri {
     #>
     [CmdletBinding()]
     [OutputType([string])]
-    param ()
+    param (
+        [Parameter(Mandatory)]
+        [String]
+        [ValidatePattern("https://.*")]
+        $Url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
+    )
 
-    $url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
     } catch {
@@ -308,9 +312,9 @@ $MaximumVariableCount = 8192 # Graph-Modul hat mehr als 4096 Variablen
 $Path = "C:\TSD.CenterVision\Software\ODT"
 $DownloadUrl = Get-ODTUri
 $NameConfig = "config.xml"
-$PathConfig = "$( $Path )\$( $NameConfig )"
-$PathExePacked = "$( $Path)\officedeploymenttool_packed.exe"
-$PathExeSetup = "$( $Path )\setup.exe"
+$PathConfig = Join-Path -Path $Path -ChildPath $NameConfig
+$PathExePacked = Join-Path -Path $Path -ChildPath "officedeploymenttool_packed.exe"
+$PathExeSetup = Join-Path -Path $Path -ChildPath "setup.exe"
 $Licenses = @(
     [PSCustomObject]@{GUID='6fd2c87f-b296-42f0-b197-1e91e994b900'; Product_Display_Name='Microsoft 365 E3'; ServicePlanName='OFFICESUBSCRIPTION'},
     [PSCustomObject]@{GUID='c42b9cae-ea4f-4ab7-9717-81576235ccac'; Product_Display_Name='Microsoft 365 Business Standard'; ServicePlanName='OFFICE_BUSINESS'},
@@ -364,10 +368,13 @@ if (Get-OfficeInstalled) {
         Log 'Teste, ob ODT bereits heruntergeladen wurde...'
         if (-not (Test-Path $PathExePacked)) {
             Log 'Lade ODT herunter...'
+
+            # Setze TLS-Version auf 1.1 und 1.2 zwecks Download
             $AllProtocols = [System.Net.SecurityProtocolType]'Tls11,Tls12'
             [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
             
             try {
+                # Download des ODT
                 $response = Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
                 Log 'ODT erfolgreich heruntergeladen...'
             } catch {
@@ -383,173 +390,187 @@ if (Get-OfficeInstalled) {
             Log "ODT bereits heruntergeladen."
         }
     
-        # Überprüfen, ob ODT bereits entpackt wurde, falls nicht, entpacken
-        if (-not (Test-Path $PathExeSetup)) {
-            Log 'Entpacke ODT.'
-            $args = "/extract:`"$( $Path )`" /passive /quiet"
-            Log "Args = $( $args )"
-            Start-Process $PathExePacked -ArgumentList $args
-        } else {
-            Log "ODT bereits entpackt."
-        }
-    
-        if ($null -eq $Apps) {
-            $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie die Office 365-Administratoranmeldeinformationen angeben und automatisch nach verfuegbaren Lizenzen suchen, um auszuwaehlen, ob Apps for Business oder Apps for Enterprise installiert werden sollen? („nein“ = manuell auswaehlen)'
-            switch ($ResultUseAdmin) {
-                0 {
-                    try {
-                        if (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users) {
-                            Log "Modul bereits importiert."
-                        } elseif (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users -ListAvailable) {
-                            Log "Modul bereits installiert."
-                            Log "Modul importieren..."
-                            Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
-                        } else {
-                            Log "Modul installieren..."
-                            Install-Module -Name Microsoft.Graph -Force -Scope CurrentUser
-                            Log "Modul importieren..."
-                            Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
-                        }
-                        
-                        Log "Herstellen einer Verbindung mit Azure..."
-                        Log "Bitte melden Sie sich im folgenden mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
-                        $null = Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All" -NoWelcome
-    
-                        $Properties = 'DisplayName', 'AssignedLicenses', 'DisplayName', 'Givenname', 'Surname', 'UserPrincipalName', 'OnPremisesSamAccountName'
-                        $users = Get-MgUser -All -Filter 'accountEnabled eq true' -Property $Properties | 
-                            Sort-Object -Property DisplayName | 
-                            Select-Object @{Name = 'Lizenzierung'; Expression = {foreach ($l in $_.AssignedLicenses) {
-                                    $Licenses.Where({$_.GUID -eq $l.SkuId})[0].Product_Display_Name
-                                }}}, 
-                                DisplayName, Givenname, Surname, UserPrincipalName, OnPremisesSamAccountName, AssignedLicenses
-                        
-                        $user = $users | Out-GridView -Title "Waehlen Sie den Benutzer aus, dessen Lizenz Sie verwenden moechten." -PassThru
-                        $licensePlanList = Get-MgSubscribedSku
-    
-                        if (-not ($user.AssignedLicenses)) {
-                            Log "Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
-                            Exit 1
-                        }
-    
-                        foreach ($license in $user.AssignedLicenses) {
-                            $ServicePlanNames = $licensePlanList.Where({$_.SkuId -eq $license.SkuId}).ServicePlans.ServicePlanName
-                            if ($ServicePlanNames -contains "OFFICE_BUSINESS") {
-                                # Business Plan
-                                $Apps = "O365BusinessRetail"
-                                Log "Found O365BusinessRetail."
-                            } elseif ($ServicePlanNames -contains "OFFICESUBSCRIPTION") {
-                                # Enterprise Plan
-                                $Apps = "O365ProPlusRetail"
-                                Log "Found O365ProPlusRetail."
+        # Fahre nur fort, falls der Download erfolgreich war
+        if ($ExitCode -eq 0) {
+            # Überprüfen, ob ODT bereits entpackt wurde, falls nicht, entpacken
+            if (-not (Test-Path $PathExeSetup)) {
+                Log 'Entpacke ODT.'
+                $args = "/extract:`"$( $Path )`" /passive /quiet"
+                Log "DEBUG: Args = $( $args )"
+                Start-Process $PathExePacked -ArgumentList $args -Wait
+            } else {
+                Log "ODT bereits entpackt."
+            }
+        
+            # Falls $Apps nicht durch das RMM gesetzt wurde (nicht-interaktiver Modus), frage den Benutzer, ob er die Lizenzierung automatisch ermitteln möchte (interaktiver Modus)
+            if ($null -eq $Apps) {
+                $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie die Office 365-Administratoranmeldeinformationen angeben und automatisch nach verfuegbaren Lizenzen suchen, um auszuwaehlen, ob Apps for Business oder Apps for Enterprise installiert werden sollen? („nein“ = manuell auswaehlen)'
+                switch ($ResultUseAdmin) {
+                    0 {
+                        try {
+                            # Lade PowerShell-Modul für Microsoft Graph
+                            if (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users) {
+                                Log "Modul bereits importiert."
+                            } elseif (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users -ListAvailable) {
+                                Log "Modul bereits installiert."
+                                Log "Modul importieren..."
+                                Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
+                            } else {
+                                Log "Modul installieren..."
+                                Install-Module -Name Microsoft.Graph -Force -Scope CurrentUser
+                                Log "Modul importieren..."
+                                Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
                             }
-                        }
-                        if (-not ($Apps)) {
-                            Log "Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
+                            
+                            # Herstellen einer Verbindung mit Azure
+                            Log "Herstellen einer Verbindung mit Azure..."
+                            Log "Bitte melden Sie sich im folgenden mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
+                            $null = Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All" -NoWelcome
+        
+                            # Abfrage der Benutzerlizenzen
+                            $Properties = 'DisplayName', 'AssignedLicenses', 'DisplayName', 'Givenname', 'Surname', 'UserPrincipalName', 'OnPremisesSamAccountName'
+                            $users = Get-MgUser -All -Filter 'accountEnabled eq true' -Property $Properties | 
+                                Sort-Object -Property DisplayName | 
+                                Select-Object @{Name = 'Lizenzierung'; Expression = {foreach ($l in $_.AssignedLicenses) {
+                                        $Licenses.Where({$_.GUID -eq $l.SkuId})[0].Product_Display_Name
+                                    }}}, 
+                                    DisplayName, Givenname, Surname, UserPrincipalName, OnPremisesSamAccountName, AssignedLicenses
+                            
+                            # Auswahl des Benutzers durch den Anwedner (interaktiv)
+                            $user = $users | Out-GridView -Title "Waehlen Sie den Benutzer aus, dessen Lizenz Sie verwenden moechten." -PassThru
+
+                            # Lizenzen "nachschlagen", um zu bestimmen, welche Produkte enthalten sind
+                            $licensePlanList = Get-MgSubscribedSku
+        
+                            # Wenn der Benutzer keine Lizenz hat, wird das Skript abgebrochen
+                            if (-not ($user.AssignedLicenses)) {
+                                Log "Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
+                                Exit 1
+                            }
+        
+                            # Bestimmen, ob der Benutzer Business- oder Enterprise-Apps hat
+                            foreach ($license in $user.AssignedLicenses) {
+                                $ServicePlanNames = $licensePlanList.Where({$_.SkuId -eq $license.SkuId}).ServicePlans.ServicePlanName
+                                if ($ServicePlanNames -contains "OFFICE_BUSINESS") {
+                                    # Business Plan
+                                    $Apps = "O365BusinessRetail"
+                                    Log "Found O365BusinessRetail."
+                                } elseif ($ServicePlanNames -contains "OFFICESUBSCRIPTION") {
+                                    # Enterprise Plan
+                                    $Apps = "O365ProPlusRetail"
+                                    Log "Found O365ProPlusRetail."
+                                }
+                            }
+                            
+                            # Wenn der Benutzer eine Lizenz hat, jedoch keine Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten sind, wird das Skript abgebrochen
+                            if (-not ($Apps)) {
+                                Log "Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
+                                Exit 1
+                            }
+                        } catch {
+                            Log "Unbekannter Fehler."
+                            $_.Exception.Message
                             Exit 1
+                        } finally {
+                            $null = Disconnect-MgGraph
                         }
-                    } catch {
-                        Log "Unbekannter Fehler."
-                        $_.Exception.Message
-                        Exit 1
-                    } finally {
-                        $null = Disconnect-MgGraph
+                    }
+                    1 {
+                        $a = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Enterprise (aka. "Pro Plus")', ''
+                        $b = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Business', ''
+                        $options = [System.Management.Automation.Host.ChoiceDescription[]]($a, $b)
+                        $ResultApps = $host.ui.PromptForChoice('Office Deployment Tool - Konfiguration', 'Welches Office moechten Sie installieren?', $options, 0)
+                        switch ($ResultApps) {
+                            0 {$Apps = "O365ProPlusRetail"}
+                            1 {$Apps = "O365BusinessRetail"}
+                        }
                     }
                 }
-                1 {
-                    $a = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Enterprise (aka. "Pro Plus")', ''
-                    $b = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Business', ''
-                    $options = [System.Management.Automation.Host.ChoiceDescription[]]($a, $b)
-                    $ResultApps = $host.ui.PromptForChoice('Office Deployment Tool - Konfiguration', 'Welches Office moechten Sie installieren?', $options, 0)
-                    switch ($ResultApps) {
-                        0 {$Apps = "O365ProPlusRetail"}
-                        1 {$Apps = "O365BusinessRetail"}
-                    }
+            } else {
+                Log 'Variable "Apps" durch RMM bereits gesetzt.'
+            }
+        
+            if ($null -eq $ResultBit) {
+                $ResultBit = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Office als 64-Bit-Version installieren? ("Nein" = 32-Bit)'
+                switch ($ResultBit) {
+                    0 {$Bit = "64"}
+                    1 {$Bit = "32"}
                 }
+            } else {
+                Log 'Variable "ResultBit" durch RMM bereits gesetzt.'
             }
-        } else {
-            Log 'Variable "Apps" durch RMM bereits gesetzt.'
-        }
-    
-        if ($null -eq $ResultBit) {
-            $ResultBit = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Office als 64-Bit-Version installieren? ("Nein" = 32-Bit)'
-            switch ($ResultBit) {
-                0 {$Bit = "64"}
-                1 {$Bit = "32"}
+        
+            if ($null -eq $ResultVisio) {
+                $ResultVisio = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Visio installieren?'
+                switch ($ResultVisio) {
+                    0 {$Visio = "<Product ID=`"VisioProRetail`">
+                    <Language ID=`"de-DE`" />
+                    <ExcludeApp ID=`"Groove`" />
+                    <ExcludeApp ID=`"Lync`" />
+                    </Product>"} 
+                    1 {$Visio = ""}
+                }
+            } else {
+                Log 'Variable "ResultVisio" durch RMM bereits gesetzt.'
             }
-        } else {
-            Log 'Variable "ResultBit" durch RMM bereits gesetzt.'
-        }
-    
-        if ($null -eq $ResultVisio) {
-            $ResultVisio = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Visio installieren?'
-            switch ($ResultVisio) {
-                0 {$Visio = "<Product ID=`"VisioProRetail`">
-                <Language ID=`"de-DE`" />
+        
+            if ($null -eq $ResultPublisher) {
+                $ResultPublisher = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Publisher installieren?'
+                switch ($ResultPublisher) {
+                    0 {$Publisher = "<Product ID=`"PublisherRetail`">
+                    <Language ID=`"de-DE`" />
+                    <ExcludeApp ID=`"Groove`" />
+                    <ExcludeApp ID=`"Lync`" />
+                </Product>"}
+                    1 {$Publisher = ""}
+                }
+            } else {
+                Log 'Variable "ResultPublisher" durch RMM bereits gesetzt.'
+            }
+        
+            if ($null -eq $ResultDisplayLevel) {
+                $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie den Installationsfortschritt anzeigen? ("no" = silent install)'
+                switch ($ResultDisplayLevel) {
+                    0 {$DisplayLevel = "Full"}
+                    1 {$DisplayLevel = "None"}
+                }
+            } else {
+                Log 'Variable "ResultDisplayLevel" durch RMM bereits gesetzt.'
+            }
+        
+            $ConfigFinal = "<Configuration>
+            <Add OfficeClientEdition=`"$( $Bit )`" Channel=`"Current`">
+                <Product ID=`"$( $Apps )`">
+                <Language ID=`"de-de`" />
                 <ExcludeApp ID=`"Groove`" />
                 <ExcludeApp ID=`"Lync`" />
-                </Product>"} 
-                1 {$Visio = ""}
-            }
-        } else {
-            Log 'Variable "ResultVisio" durch RMM bereits gesetzt.'
+                </Product>
+                $( $Visio )
+                $( $Publisher )
+            </Add>
+            <Property Name=`"SharedComputerLicensing`" Value=`"0`" />
+            <Property Name=`"FORCEAPPSHUTDOWN`" Value=`"TRUE`" />
+            <Property Name=`"DeviceBasedLicensing`" Value=`"0`" />
+            <Property Name=`"SCLCacheOverride`" Value=`"0`" />
+            <Updates Enabled=`"TRUE`" />
+            <RemoveMSI />
+            <AppSettings>
+                <User Key=`"software\microsoft\office\16.0\excel\options`" Name=`"defaultformat`" Value=`"51`" Type=`"REG_DWORD`" App=`"excel16`" Id=`"L_SaveExcelfilesas`" />
+                <User Key=`"software\microsoft\office\16.0\powerpoint\options`" Name=`"defaultformat`" Value=`"27`" Type=`"REG_DWORD`" App=`"ppt16`" Id=`"L_SavePowerPointfilesas`" />
+                <User Key=`"software\microsoft\office\16.0\word\options`" Name=`"defaultformat`" Value=`"`" Type=`"REG_SZ`" App=`"word16`" Id=`"L_SaveWordfilesas`" />
+            </AppSettings>
+            <Display Level=`"$( $DisplayLevel )`" AcceptEULA=`"TRUE`" />
+            </Configuration>"
+        
+            Log "Schreibe Konfigurationsdatei..."
+            Set-Content -Path $PathConfig -Value $ConfigFinal
+        
+            Log "Starte Download..."
+            Start-OfficeSetup -Path $PathExeSetup -Type Download
+        
+            Log "Starte Installation..."
+            Start-OfficeSetup -Path $PathExeSetup -Type Configure
         }
-    
-        if ($null -eq $ResultPublisher) {
-            $ResultPublisher = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Publisher installieren?'
-            switch ($ResultPublisher) {
-                0 {$Publisher = "<Product ID=`"PublisherRetail`">
-                <Language ID=`"de-DE`" />
-                <ExcludeApp ID=`"Groove`" />
-                <ExcludeApp ID=`"Lync`" />
-            </Product>"}
-                1 {$Publisher = ""}
-            }
-        } else {
-            Log 'Variable "ResultPublisher" durch RMM bereits gesetzt.'
-        }
-    
-        if ($null -eq $ResultDisplayLevel) {
-            $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie den Installationsfortschritt anzeigen? ("no" = silent install)'
-            switch ($ResultDisplayLevel) {
-                0 {$DisplayLevel = "Full"}
-                1 {$DisplayLevel = "None"}
-            }
-        } else {
-            Log 'Variable "ResultDisplayLevel" durch RMM bereits gesetzt.'
-        }
-    
-        $ConfigFinal = "<Configuration>
-        <Add OfficeClientEdition=`"$( $Bit )`" Channel=`"Current`">
-            <Product ID=`"$( $Apps )`">
-            <Language ID=`"de-de`" />
-            <ExcludeApp ID=`"Groove`" />
-            <ExcludeApp ID=`"Lync`" />
-            </Product>
-            $( $Visio )
-            $( $Publisher )
-        </Add>
-        <Property Name=`"SharedComputerLicensing`" Value=`"0`" />
-        <Property Name=`"FORCEAPPSHUTDOWN`" Value=`"TRUE`" />
-        <Property Name=`"DeviceBasedLicensing`" Value=`"0`" />
-        <Property Name=`"SCLCacheOverride`" Value=`"0`" />
-        <Updates Enabled=`"TRUE`" />
-        <RemoveMSI />
-        <AppSettings>
-            <User Key=`"software\microsoft\office\16.0\excel\options`" Name=`"defaultformat`" Value=`"51`" Type=`"REG_DWORD`" App=`"excel16`" Id=`"L_SaveExcelfilesas`" />
-            <User Key=`"software\microsoft\office\16.0\powerpoint\options`" Name=`"defaultformat`" Value=`"27`" Type=`"REG_DWORD`" App=`"ppt16`" Id=`"L_SavePowerPointfilesas`" />
-            <User Key=`"software\microsoft\office\16.0\word\options`" Name=`"defaultformat`" Value=`"`" Type=`"REG_SZ`" App=`"word16`" Id=`"L_SaveWordfilesas`" />
-        </AppSettings>
-        <Display Level=`"$( $DisplayLevel )`" AcceptEULA=`"TRUE`" />
-        </Configuration>"
-    
-        Log "Schreibe Konfigurationsdatei..."
-        Set-Content -Path $PathConfig -Value $ConfigFinal
-    
-        Log "Starte Download..."
-        Start-OfficeSetup -Path $PathExeSetup -Type Download
-    
-        Log "Starte Installation..."
-        Start-OfficeSetup -Path $PathExeSetup -Type Configure
     } catch {
         Log "Unbekannter Fehler: $( $_.Exception.Message )"
     } finally {
