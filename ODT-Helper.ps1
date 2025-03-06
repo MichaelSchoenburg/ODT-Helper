@@ -551,6 +551,7 @@ Start-OfficeSetup -Path $PathExeSetup -Type Download
 Log "Starte Installation..."
 Start-OfficeSetup -Path $PathExeSetup -Type Configure
 
+Log "Herunterfahren wieder erlauben..."
 Set-DenyShutdown -Active $false
 
 # Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
