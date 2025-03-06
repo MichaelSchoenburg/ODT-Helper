@@ -322,11 +322,11 @@ $Licenses = @(
 ) # Source: https://learn.microsoft.com/en-us/entra/identity/users/licensing-service-plan-reference
 
 # Beispiel für die Verwendung in einem RMM (z. B. Riverbird): folgende Variablen müssen während der Laufzeit gesetzt werden:
-$Apps = "O365ProPlusRetail"
-$ResultBit = "64"
-$ResultVisio = 0
-$ResultPublisher = 0
-$ResultDisplayLevel = 0
+# $Apps = "O365ProPlusRetail"
+# $ResultBit = "64"
+# $ResultVisio = 0
+# $ResultPublisher = 0
+# $ResultDisplayLevel = 0
 
 #endregion DECLARATIONS
 #region EXECUTION
