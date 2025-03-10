@@ -380,6 +380,7 @@ Write-Host "
                                             |_|                
                                            by Michael Schönburg" -ForegroundColor Yellow
 }
+# Font from https://patorjk.com/software/taag
 
 # Überprüfen, ob Microsoft Office bereits installiert ist
 if (Get-OfficeInstalled) {
