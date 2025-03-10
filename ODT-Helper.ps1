@@ -339,7 +339,6 @@ function Start-OfficeSetup {
     Declare local variables and global variables
 #>
 
-$Interactive = $true # Setze auf $false für nicht-interaktiven Modus (z.B. RMM)
 $MaximumVariableCount = 8192 # Graph-Modul hat mehr als 4096 Variablen
 $Path = "C:\TSD.CenterVision\Software\ODT"
 $NameConfig = "config.xml"
@@ -355,6 +354,14 @@ $Licenses = @(
     [PSCustomObject]@{GUID='9aaf7827-d63c-4b61-89c3-182f06f82e5c'; Product_Display_Name='Office 365 Business'; ServicePlanName='OFFICE_BUSINESS'},
     [PSCustomObject]@{GUID='b1188c4c-1b36-4018-b48b-ee07604f6feb'; Product_Display_Name='Office 365 Business Premium'; ServicePlanName='OFFICE_BUSINESS'}
 ) # Source: https://learn.microsoft.com/en-us/entra/identity/users/licensing-service-plan-reference
+
+# Wenn $interactive nicht spezifiziert wurde, greift der interaktive Modus, wo ein Mensch vor dem PC sitzen muss.
+# Wenn $interactive spezifiziert wurde, wird der nicht-interaktive Modus für z. B. ein RMM verwendet.
+if ($null -eq $Interactive) {
+    $Interactive = $true
+} else {
+    $Interactive = $false
+}
 
 # Beispiel für die Verwendung in einem RMM (z. B. Riverbird): folgende Variablen müssen während der Laufzeit gesetzt werden:
 # $Apps = "O365ProPlusRetail"
