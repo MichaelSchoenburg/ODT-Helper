@@ -62,21 +62,24 @@ function Write-ConsoleLog {
         $Text
     )
 
-    # Aktuelle VerbosePreference speichern
-    # $VerbosePreferenceBefore = $VerbosePreference
+    if ($Interactive) {
+        # Aktuelle VerbosePreference speichern
+        $VerbosePreferenceBefore = $VerbosePreference
 
-    # Verbose-Ausgabe aktivieren
-    # $VerbosePreference = 'Continue'
+        # Verbose-Ausgabe aktivieren
+        $VerbosePreference = 'Continue'
 
-    # Verbose-Ausgabe schreiben
-    # Write-Verbose "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
-    Write-Output "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
+        # Verbose-Ausgabe schreiben
+        Write-Verbose "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
 
-    # Aktuelle VerbosePreference wiederherstellen
-    # $VerbosePreference = $VerbosePreferenceBefore
+        # Aktuelle VerbosePreference wiederherstellen
+        $VerbosePreference = $VerbosePreferenceBefore
+    } else {
+        Write-Output "$( Get-Date -Format 'MM/dd/yyyy HH:mm:ss' ) - $( $Text )"
+    }
 }
 
-function Get-ODTUri {
+function Get-OdtUri {
     <#
         .SYNOPSIS
             Ruft die Download-URL des neuesten Office 365 Deployment Tools (ODT) von der Microsoft-Webseite ab.
@@ -89,10 +92,11 @@ function Get-ODTUri {
         .LINK
             https://www.meinekleinefarm.net/
     #>
+
     [CmdletBinding()]
     [OutputType([string])]
     param (
-        [Parameter(Mandatory)]
+        [Parameter()]
         [String]
         [ValidatePattern("https://.*")]
         $Url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
@@ -101,16 +105,14 @@ function Get-ODTUri {
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction SilentlyContinue
     } catch {
-        Log "Fehler beim Abrufen der URL $($url) für den Download des ODT mit folgendem Fehler: $( $_.Exception.Message )"
-        Exit 1
+        throw "Fehler beim Abrufen der URL $($url) für den Download des ODT mit folgendem Fehler: $( $_.Exception.Message )"
     }
 
     try {
-        $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # I modified this one to work with the current website
-        Log $ODTUri.href
+        $ODTUri = $response.links | Where-Object {$_.outerHTML -like '*Download*Office Deployment Tool*'} # Ich habe dies geändert, damit es mit der aktuellen Website funktioniert
+        return $ODTUri.href
     } catch {
-        Log "Fehler beim Extrahieren der Download-URL von der Microsoft-Webseite für das ODT. Fehler: $( $_.Exception.Message )"
-        Exit 1
+        throw "Fehler beim Extrahieren der Download-URL von der Microsoft-Webseite für das ODT. Fehler: $( $_.Exception.Message )"
     }
 }
 
@@ -233,6 +235,98 @@ function Set-DenyShutdown {
     }
 }
 
+function Get-UserLicense {
+    <#
+    .SYNOPSIS
+        Überprüfen, welche Lizenz für Microsoft Apps der Benutzer hat.
+    .DESCRIPTION
+        Dient dazu, die Lizenzen eines Benutzers in einem Microsoft 365-Mandanten abzurufen. 
+        Diese Funktion ist besonders nützlich in einem interaktiven Modus, 
+        in dem der Benutzer eine Auswahl treffen kann. 
+        Sie verwendet das Microsoft Graph PowerShell-Modul, 
+        um eine Verbindung zu Azure herzustellen und die Benutzerinformationen abzurufen.
+    .INPUTS
+        Interaktiv: Der Benutzer wird aufgefordert, einen Benutzer auszuwählen, dessen Lizenz abgefragt werden soll.
+    .OUTPUTS
+        O365BusinessRetail
+        O365ProPlusRetail
+        1 = Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen.
+        2 = Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen.
+    #>
+    
+    # Die Funktion wird nur im interaktiven Modus verwendet. 
+    # Im interaktiven Modus ist das Log auf verbose geschaltet, 
+    # so wird die Ausgabe (return) der Funktion nicht beeinträchtigt.
+
+    try {
+        # Lade PowerShell-Modul für Microsoft Graph
+        if (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users) {
+            Log "Modul bereits importiert."
+        } elseif (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users -ListAvailable) {
+            Log "Modul bereits installiert."
+            Log "Modul importieren..."
+            Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
+        } else {
+            Log "Modul installieren..."
+            Install-Module -Name Microsoft.Graph -Force -Scope CurrentUser
+            Log "Modul importieren..."
+            Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
+        }
+
+        # Herstellen einer Verbindung mit Azure
+        Log "Herstellen einer Verbindung mit Azure..."
+        Log "Bitte melden Sie sich im folgenden mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
+        $null = Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All" -NoWelcome
+
+        # Abfrage der Benutzerlizenzen
+        $Properties = 'DisplayName', 'AssignedLicenses', 'DisplayName', 'Givenname', 'Surname', 'UserPrincipalName', 'OnPremisesSamAccountName'
+        $users = Get-MgUser -All -Filter 'accountEnabled eq true' -Property $Properties | 
+            Sort-Object -Property DisplayName | 
+            Select-Object @{Name = 'Lizenzierung'; Expression = {foreach ($l in $_.AssignedLicenses) {
+                    $Licenses.Where({$_.GUID -eq $l.SkuId})[0].Product_Display_Name
+                }}}, 
+                DisplayName, Givenname, Surname, UserPrincipalName, OnPremisesSamAccountName, AssignedLicenses
+        
+        # Auswahl des Benutzers durch den Anwender (interaktiv)
+        $user = $users | Out-GridView -Title "Waehlen Sie den Benutzer aus, dessen Lizenz Sie verwenden moechten." -PassThru
+
+        # Lizenzen "nachschlagen", um zu bestimmen, welche Produkte enthalten sind
+        $licensePlanList = Get-MgSubscribedSku
+
+        # Wenn der Benutzer keine Lizenz hat, wird das Skript abgebrochen
+        if (-not ($user.AssignedLicenses)) {
+            $return = 1
+            throw "Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
+        }
+
+        # Bestimmen, ob der Benutzer Business- oder Enterprise-Apps hat
+        foreach ($license in $user.AssignedLicenses) {
+            $ServicePlanNames = $licensePlanList.Where({$_.SkuId -eq $license.SkuId}).ServicePlans.ServicePlanName
+            if ($ServicePlanNames -contains "OFFICE_BUSINESS") {
+                # Business Plan
+                $return = "O365BusinessRetail"
+                Log "Found O365BusinessRetail."
+            } elseif ($ServicePlanNames -contains "OFFICESUBSCRIPTION") {
+                # Enterprise Plan
+                $return = "O365ProPlusRetail"
+                Log "Found O365ProPlusRetail."
+            }
+        }
+        
+        # Wenn der Benutzer eine Lizenz hat, jedoch keine Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten sind, wird das Skript abgebrochen
+        if (-not ($return)) {
+            $return = 2
+            throw "Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
+        }
+    } catch {
+        Log "Fehler: $( $_.Exception.Message )"
+    } finally {
+        $null = Disconnect-MgGraph
+    }
+
+    return $return
+}
+
 function Get-OfficeInstalled {
     $officeInstalled = $false
     
@@ -277,7 +371,9 @@ function Get-OfficeInstalled {
         Fazit
     #>
 
-    if ($officeInstalled) {
+    if ($env:COMPUTERNAME -eq "CV-NB-20") {
+        return $false
+    } elseif ($officeInstalled) {
         return $true
     } else {
         return $false
@@ -308,9 +404,9 @@ function Start-OfficeSetup {
     Declare local variables and global variables
 #>
 
+$Interactive = $true # Setze auf $false für nicht-interaktiven Modus (z.B. RMM)
 $MaximumVariableCount = 8192 # Graph-Modul hat mehr als 4096 Variablen
 $Path = "C:\TSD.CenterVision\Software\ODT"
-$DownloadUrl = Get-ODTUri
 $NameConfig = "config.xml"
 $PathConfig = Join-Path -Path $Path -ChildPath $NameConfig
 $PathExePacked = Join-Path -Path $Path -ChildPath "officedeploymenttool_packed.exe"
@@ -345,136 +441,79 @@ if (Get-OfficeInstalled) {
 } else {
     Log "Microsoft Office ist noch nicht installiert. Das Skript wird fortgesetzt."
 
+    # Extrahiere Download-URL für das ODT von der Microsoft-Webseite
     try {
-        # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
-        # Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
-        # Es wird im Hintergrund von IT-Center Engels
-        # Microsoft Office und Microsoft Teams installiert
-        # Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
-    
-        Log "Verhindere Herunterfahren des Computers..."
-        Set-DenyShutdown -Active $true
-    
-        # Überprüfen, ob der ODT-Ordner existiert
-        Log "Überprüfen, ob der ODT-Ordner existiert..."
-        if (Test-Path -Path $Path) {
-            Log "Ordner fuer ODT existiert bereits."
-        } else {
-            Log "Lege Ordner fuer ODT an..."
-            New-Item -Path $Path -ItemType Directory
-        }
-    
-        # Überprüfen, ob ODT bereits heruntergeladen wurde, falls nicht, herunterladen
-        Log 'Teste, ob ODT bereits heruntergeladen wurde...'
-        if (-not (Test-Path $PathExePacked)) {
-            Log 'Lade ODT herunter...'
+        $DownloadUrl = Get-OdtUri # Terminierender Error würde in der Funktion geworfen werden.
+        Log "Download-Link für ODT gefunden = $( $ODTUri.href )"
 
-            # Setze TLS-Version auf 1.1 und 1.2 zwecks Download
-            $AllProtocols = [System.Net.SecurityProtocolType]'Tls11,Tls12'
-            [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
-            
-            try {
-                # Download des ODT
-                $response = Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
-                Log 'ODT erfolgreich heruntergeladen...'
-            } catch {
-                if( $_.Exception.Response.StatusCode.Value__ -eq 404 ) {
-                    Log "ODT kann nicht heruntergeladen werden. 404 Nicht gefunden. Vielleicht ist die URL nicht mehr aktuell?"
-                    $ExitCode = 1
-                } else {
-                    Log "Unbekannter Fehler beim Herunterladen des ODT. Response Code: $( $_.Exception.Response.StatusCode.Value__ ) Error: $( $_.Exception.Message )"
-                    $ExitCode = 1
-                }
+        try {
+            # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
+            # Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
+            # Es wird im Hintergrund von IT-Center Engels
+            # Microsoft Office und Microsoft Teams installiert
+            # Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
+        
+            Log "Verhindere Herunterfahren des Computers..."
+            Set-DenyShutdown -Active $true -ErrorAction Continue
+        
+            # Überprüfen, ob der ODT-Ordner existiert
+            Log "Überprüfen, ob der ODT-Ordner existiert..."
+            if (Test-Path -Path $Path) {
+                Log "Ordner fuer ODT existiert bereits."
+            } else {
+                Log "Lege Ordner fuer ODT an..."
+                New-Item -Path $Path -ItemType Directory -ErrorAction Stop # Terminierender Error, falls der Ordner nicht erstellt werden kann.
             }
-        } else {
-            Log "ODT bereits heruntergeladen."
-        }
+        
+            # Überprüfen, ob ODT bereits heruntergeladen wurde, falls nicht, herunterladen
+            Log 'Teste, ob ODT bereits heruntergeladen wurde...'
+            if (-not (Test-Path $PathExePacked)) {
+                Log 'Lade ODT herunter...'
     
-        # Fahre nur fort, falls der Download erfolgreich war
-        if ($ExitCode -eq 0) {
+                # Setze TLS-Version auf 1.1 und 1.2 zwecks Download
+                $AllProtocols = [System.Net.SecurityProtocolType]'Tls11,Tls12'
+                [System.Net.ServicePointManager]::SecurityProtocol = $AllProtocols
+                
+                try {
+                    # Download des ODT
+                    $response = Invoke-WebRequest -Uri $DownloadUrll -OutFile $PathExePacked -PassThru -UseBasicParsing
+                    Log 'ODT erfolgreich heruntergeladen...'
+                } catch {
+                    if( $_.Exception.Response.StatusCode.Value__ -eq 404 ) {
+                        throw "ODT kann nicht heruntergeladen werden. 404 Nicht gefunden. Vielleicht ist die URL nicht mehr aktuell oder es liegt eine Störung bei Microsoft vor (gab es bereits einmal)?"
+                    } else {
+                        throw "Unbekannter Fehler beim Herunterladen des ODT. Response Code: $( $_.Exception.Response.StatusCode.Value__ ) Error: $( $_.Exception.Message )"
+                    }
+                }
+            } else {
+                Log "ODT bereits heruntergeladen."
+            }
+        
             # Überprüfen, ob ODT bereits entpackt wurde, falls nicht, entpacken
             if (-not (Test-Path $PathExeSetup)) {
-                Log 'Entpacke ODT.'
-                $args = "/extract:`"$( $Path )`" /passive /quiet"
-                Log "DEBUG: Args = $( $args )"
-                Start-Process $PathExePacked -ArgumentList $args -Wait
+                Log "Entpacke ODT..."
+                $arguments = "/extract:$( $Path ) /passive /quiet"
+                Log "DEBUG: arguments = $( $arguments )"
+                Start-Process $PathExePacked -ArgumentList $arguments -Wait
             } else {
                 Log "ODT bereits entpackt."
             }
         
-            # Falls $Apps nicht durch das RMM gesetzt wurde (nicht-interaktiver Modus), frage den Benutzer, ob er die Lizenzierung automatisch ermitteln möchte (interaktiver Modus)
+            # Falls $Apps nicht durch das RMM gesetzt wurde (nicht-interaktiver Modus), frage den Benutzer (interaktiver Modus), ob er die Lizenzierung automatisch ermitteln möchte oder nicht
             if ($null -eq $Apps) {
                 $ResultUseAdmin = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie die Office 365-Administratoranmeldeinformationen angeben und automatisch nach verfuegbaren Lizenzen suchen, um auszuwaehlen, ob Apps for Business oder Apps for Enterprise installiert werden sollen? („nein“ = manuell auswaehlen)'
                 switch ($ResultUseAdmin) {
                     0 {
-                        try {
-                            # Lade PowerShell-Modul für Microsoft Graph
-                            if (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users) {
-                                Log "Modul bereits importiert."
-                            } elseif (Get-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users -ListAvailable) {
-                                Log "Modul bereits installiert."
-                                Log "Modul importieren..."
-                                Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
-                            } else {
-                                Log "Modul installieren..."
-                                Install-Module -Name Microsoft.Graph -Force -Scope CurrentUser
-                                Log "Modul importieren..."
-                                Import-Module Microsoft.Graph.Authentication, Microsoft.Graph.Users
+                        $License = Get-UserLicense
+                        if (1,2 -contains $License) {
+                            switch ($License) {
+                                1 { $Grund =  "Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen." }
+                                2 { $Grund =  "Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen." }
                             }
-                            
-                            # Herstellen einer Verbindung mit Azure
-                            Log "Herstellen einer Verbindung mit Azure..."
-                            Log "Bitte melden Sie sich im folgenden mit einem globalen Administrator des Mandanten an, in dem sich der Benutzer befindet."
-                            $null = Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All" -NoWelcome
-        
-                            # Abfrage der Benutzerlizenzen
-                            $Properties = 'DisplayName', 'AssignedLicenses', 'DisplayName', 'Givenname', 'Surname', 'UserPrincipalName', 'OnPremisesSamAccountName'
-                            $users = Get-MgUser -All -Filter 'accountEnabled eq true' -Property $Properties | 
-                                Sort-Object -Property DisplayName | 
-                                Select-Object @{Name = 'Lizenzierung'; Expression = {foreach ($l in $_.AssignedLicenses) {
-                                        $Licenses.Where({$_.GUID -eq $l.SkuId})[0].Product_Display_Name
-                                    }}}, 
-                                    DisplayName, Givenname, Surname, UserPrincipalName, OnPremisesSamAccountName, AssignedLicenses
-                            
-                            # Auswahl des Benutzers durch den Anwedner (interaktiv)
-                            $user = $users | Out-GridView -Title "Waehlen Sie den Benutzer aus, dessen Lizenz Sie verwenden moechten." -PassThru
-
-                            # Lizenzen "nachschlagen", um zu bestimmen, welche Produkte enthalten sind
-                            $licensePlanList = Get-MgSubscribedSku
-        
-                            # Wenn der Benutzer keine Lizenz hat, wird das Skript abgebrochen
-                            if (-not ($user.AssignedLicenses)) {
-                                Log "Dieser Benutzer besitzt gar keine Lizenz. Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
-                                Exit 1
-                            }
-        
-                            # Bestimmen, ob der Benutzer Business- oder Enterprise-Apps hat
-                            foreach ($license in $user.AssignedLicenses) {
-                                $ServicePlanNames = $licensePlanList.Where({$_.SkuId -eq $license.SkuId}).ServicePlans.ServicePlanName
-                                if ($ServicePlanNames -contains "OFFICE_BUSINESS") {
-                                    # Business Plan
-                                    $Apps = "O365BusinessRetail"
-                                    Log "Found O365BusinessRetail."
-                                } elseif ($ServicePlanNames -contains "OFFICESUBSCRIPTION") {
-                                    # Enterprise Plan
-                                    $Apps = "O365ProPlusRetail"
-                                    Log "Found O365ProPlusRetail."
-                                }
-                            }
-                            
-                            # Wenn der Benutzer eine Lizenz hat, jedoch keine Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten sind, wird das Skript abgebrochen
-                            if (-not ($Apps)) {
-                                Log "Dieser Benutzer besitzt eine Lizenz, jedoch ohne Microsoft Apps (weder Business-Apps noch Enterprise-Apps) darin enthalten! Bitte weisen Sie eine Lizenz zu, die Microsoft Apps enthaelt. Skript wird abgebrochen."
-                                Exit 1
-                            }
-                        } catch {
-                            Log "Unbekannter Fehler."
-                            $_.Exception.Message
-                            Exit 1
-                        } finally {
-                            $null = Disconnect-MgGraph
+                            throw "Fehler beim Abrufen der Benutzerlizenz. Skript wird abgebrochen. $( $Grund )"
                         }
                     }
+
                     1 {
                         $a = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Enterprise (aka. "Pro Plus")', ''
                         $b = New-Object System.Management.Automation.Host.ChoiceDescription 'Microsoft Apps for &Business', ''
@@ -490,6 +529,7 @@ if (Get-OfficeInstalled) {
                 Log 'Variable "Apps" durch RMM bereits gesetzt.'
             }
         
+            # 32-Bit oder 64-Bit?
             if ($null -eq $ResultBit) {
                 $ResultBit = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Office als 64-Bit-Version installieren? ("Nein" = 32-Bit)'
                 switch ($ResultBit) {
@@ -500,6 +540,7 @@ if (Get-OfficeInstalled) {
                 Log 'Variable "ResultBit" durch RMM bereits gesetzt.'
             }
         
+            # Visio installieren?
             if ($null -eq $ResultVisio) {
                 $ResultVisio = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Visio installieren?'
                 switch ($ResultVisio) {
@@ -514,6 +555,7 @@ if (Get-OfficeInstalled) {
                 Log 'Variable "ResultVisio" durch RMM bereits gesetzt.'
             }
         
+            # Publisher installieren?
             if ($null -eq $ResultPublisher) {
                 $ResultPublisher = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Publisher installieren?'
                 switch ($ResultPublisher) {
@@ -528,6 +570,7 @@ if (Get-OfficeInstalled) {
                 Log 'Variable "ResultPublisher" durch RMM bereits gesetzt.'
             }
         
+            # Installationsfortschritt anzeigen?
             if ($null -eq $ResultDisplayLevel) {
                 $ResultDisplayLevel = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie den Installationsfortschritt anzeigen? ("no" = silent install)'
                 switch ($ResultDisplayLevel) {
@@ -538,11 +581,11 @@ if (Get-OfficeInstalled) {
                 Log 'Variable "ResultDisplayLevel" durch RMM bereits gesetzt.'
             }
         
+            # Konfigurationsdatei zusammen bauen
             $ConfigFinal = "<Configuration>
             <Add OfficeClientEdition=`"$( $Bit )`" Channel=`"Current`">
                 <Product ID=`"$( $Apps )`">
                 <Language ID=`"de-de`" />
-                <ExcludeApp ID=`"Groove`" />
                 <ExcludeApp ID=`"Lync`" />
                 </Product>
                 $( $Visio )
@@ -570,15 +613,21 @@ if (Get-OfficeInstalled) {
         
             Log "Starte Installation..."
             Start-OfficeSetup -Path $PathExeSetup -Type Configure
+
+            $ExitCode = 0
+        } catch {
+            throw # rethrow error
+        } finally {
+            Log "Herunterfahren wieder erlauben..."
+            Set-DenyShutdown -Active $false -ErrorAction Continue
+        
+            # Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
         }
-    } catch {
-        Log "Unbekannter Fehler: $( $_.Exception.Message )"
+    }
+    catch {
+        Log "Ein Fehler ist aufgetreten. Das Skript wird abgebrochen. Fehler: $( $_.Exception.Message )"
+        $ExitCode = 1
     } finally {
-        Log "Herunterfahren wieder erlauben..."
-        Set-DenyShutdown -Active $false
-    
-        # Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
-    
         Exit $ExitCode
     }
 }
