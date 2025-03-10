@@ -370,6 +370,17 @@ $Licenses = @(
     Script entry point
 #>
 
+if ($Interactive) {
+Write-Host "
+     ___   ____  _____       _   _        _                    
+    / _ \ |  _ \|_   _|     | | | |  ___ | | _ __    ___  _ __ 
+   | | | || | | | | | _____ | |_| | / _ \| || '_ \  / _ \| '__|
+   | |_| || |_| | | ||_____||  _  ||  __/| || |_) ||  __/| |   
+    \___/ |____/  |_|       |_| |_| \___||_|| .__/  \___||_|   
+                                            |_|                
+                                           by Michael Schönburg" -ForegroundColor Yellow
+}
+
 # Überprüfen, ob Microsoft Office bereits installiert ist
 if (Get-OfficeInstalled) {
     Log "Microsoft Office ist bereits installiert. Das Skript wird erfolgreich abgebrochen."
