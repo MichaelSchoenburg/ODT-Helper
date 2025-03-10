@@ -361,6 +361,7 @@ $Licenses = @(
 # Beispiel für die Verwendung in einem RMM (z. B. Riverbird): folgende Variablen müssen während der Laufzeit gesetzt werden:
 # $Apps = "O365ProPlusRetail"
 # $ResultBit = "64"
+# $SharedComputerLicensing = 0
 # $ResultVisio = 0
 # $ResultPublisher = 0
 # $ResultDisplayLevel = 0
@@ -423,7 +424,7 @@ if (Get-OfficeInstalled) {
             # Überprüfen, ob ODT bereits entpackt wurde, falls nicht, entpacken
             if (-not (Test-Path $PathExeSetup)) {
                 Log "Entpacke ODT..."
-                $arguments = "/extract:$( $Path ) /passive /quiet"
+                $arguments = "/extract:`"$( $Path )`" /passive /quiet"
                 Log "DEBUG: arguments = $( $arguments )"
                 Start-Process $PathExePacked -ArgumentList $arguments -Wait
             } else {
@@ -470,20 +471,31 @@ if (Get-OfficeInstalled) {
             } else {
                 Log 'Variable "ResultBit" durch RMM bereits gesetzt.'
             }
+
+            # SharedComputerLicensing (Terminal Server/RDSH) aktivieren?
+            if ($null -eq $SharedComputerLicensing) {
+                $ResultSharedComputerLicensing = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question "Wird der Computer von mehreren Benutzern verwendet (Terminal Server aka. Remotedesktop Session Host?"
+            }
+
+            switch ($ResultSharedComputerLicensing) {
+                0 {$SharedComputerLicensing = "1"}
+                1 {$SharedComputerLicensing = "0"}
+            }
         
             # Visio installieren?
             if ($null -eq $ResultVisio) {
                 $ResultVisio = New-Menu -Title 'Office Deployment Tool - Konfiguration' -ChoiceA "Yes" -ChoiceB "No" -Question 'Moechten Sie Microsoft Visio installieren?'
-                switch ($ResultVisio) {
-                    0 {$Visio = "<Product ID=`"VisioProRetail`">
-                    <Language ID=`"de-DE`" />
-                    <ExcludeApp ID=`"Groove`" />
-                    <ExcludeApp ID=`"Lync`" />
-                    </Product>"} 
-                    1 {$Visio = ""}
-                }
             } else {
                 Log 'Variable "ResultVisio" durch RMM bereits gesetzt.'
+            }
+            
+            switch ($ResultVisio) {
+                0 {$Visio = "<Product ID=`"VisioProRetail`">
+                <Language ID=`"de-DE`" />
+                <ExcludeApp ID=`"Groove`" />
+                <ExcludeApp ID=`"Lync`" />
+                </Product>"} 
+                1 {$Visio = ""}
             }
         
             # Publisher installieren?
@@ -522,7 +534,7 @@ if (Get-OfficeInstalled) {
                 $( $Visio )
                 $( $Publisher )
             </Add>
-            <Property Name=`"SharedComputerLicensing`" Value=`"0`" />
+            <Property Name=`"SharedComputerLicensing`" Value=`"$( $ResultSharedComputerLicensing )`" />
             <Property Name=`"FORCEAPPSHUTDOWN`" Value=`"TRUE`" />
             <Property Name=`"DeviceBasedLicensing`" Value=`"0`" />
             <Property Name=`"SCLCacheOverride`" Value=`"0`" />
