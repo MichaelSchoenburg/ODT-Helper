@@ -308,9 +308,7 @@ function Get-OfficeInstalled {
         Fazit
     #>
 
-    if ($env:COMPUTERNAME -eq "CV-NB-20") {
-        return $false
-    } elseif ($officeInstalled) {
+    if ($officeInstalled) {
         return $true
     } else {
         return $false
