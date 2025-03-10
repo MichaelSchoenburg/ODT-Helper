@@ -380,7 +380,7 @@ if (Get-OfficeInstalled) {
     # Extrahiere Download-URL für das ODT von der Microsoft-Webseite
     try {
         $DownloadUrl = Get-OdtUri # Terminierender Error würde in der Funktion geworfen werden.
-        Log "Download-Link für ODT gefunden = $( $ODTUri.href )"
+        Log "Download-Link für ODT gefunden = $( $DownloadUrl )"
 
         try {
             Log "Verhindere Herunterfahren des Computers..."
@@ -406,7 +406,7 @@ if (Get-OfficeInstalled) {
                 
                 try {
                     # Download des ODT
-                    $response = Invoke-WebRequest -Uri $DownloadUrll -OutFile $PathExePacked -PassThru -UseBasicParsing
+                    $response = Invoke-WebRequest -Uri $DownloadUrl -OutFile $PathExePacked -PassThru -UseBasicParsing
                     Log 'ODT erfolgreich heruntergeladen...'
                 } catch {
                     if( $_.Exception.Response.StatusCode.Value__ -eq 404 ) {
