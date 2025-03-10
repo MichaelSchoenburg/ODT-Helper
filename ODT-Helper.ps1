@@ -373,6 +373,7 @@ if ($null -eq $Interactive) {
 # $ResultPushOver = 0
 # $ApiToken = "API-Token"
 # $UserKey = "User-Key"
+# Interactive = "irgendetwas"
 
 #endregion DECLARATIONS
 #region EXECUTION
