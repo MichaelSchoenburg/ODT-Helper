@@ -363,6 +363,9 @@ $Licenses = @(
 # $ResultVisio = 0
 # $ResultPublisher = 0
 # $ResultDisplayLevel = 0
+# $ResultPushOver = 0
+# $ApiToken = "API-Token"
+# $UserKey = "User-Key"
 
 #endregion DECLARATIONS
 #region EXECUTION
@@ -533,6 +536,14 @@ if (Get-OfficeInstalled) {
             } else {
                 Log 'Variable "ResultDisplayLevel" durch RMM bereits gesetzt.'
             }
+
+            if ($null -eq $ResultPushOver) {
+                $ResultPushOver = New-Menu -Title "Office Deployment Tool - Notification" -ChoiceA "Yes" -ChoiceB "No" -Question "Hast Du einen PushOver-Account und möchtest eine Benachrichtigung erhalten, wenn die Installation abgeschlossen ist?"
+                if ($ResultPushOver -eq 0) {
+                    $ApiToken = Read-Host -Prompt "Bitte gib deinen API-Token ein"
+                    $UserKey = Read-Host -Prompt "Bitte gib deinen User-Key ein"
+                }
+            }
         
             # Konfigurationsdatei zusammen bauen
             $ConfigFinal = "<Configuration>
@@ -580,6 +591,29 @@ if (Get-OfficeInstalled) {
         Log "Ein Fehler ist aufgetreten. Das Skript wird abgebrochen. Fehler: $( $_.Exception.Message )"
         $ExitCode = 1
     } finally {
+        # PushOver Notification
+        if ($ResultPushOver -eq 0) {
+            $apiKeyUrl = "https://api.pushover.net/1/messages.json"
+        
+            switch ($ExitCode) {
+                0 { "Das Office Deployment Tool (ODT) wurde erfolgreich auf dem Computer $( $env:COMPUTERNAME ) installiert." }
+                1 { "Bei der Installation des  Office Deployment Tool (ODT) auf dem Computer $( $env:COMPUTERNAME ) ist folgender Fehler aufgetreten: $( $_.Exception.Message )" }
+            }
+
+            $body = @{
+                "token" = $ApiToken
+                "user" = $UserKey
+                "message" = $message
+            } | ConvertTo-Json
+            
+            $header = @{
+                "Content-Type" = "application/json"
+            }
+            
+            Invoke-RestMethod -Uri $apiKeyUrl -Method 'Post' -Body $body -Headers $header
+        }
+
+        # ExitCode setzen und Skript beenden
         Exit $ExitCode
     }
 }
