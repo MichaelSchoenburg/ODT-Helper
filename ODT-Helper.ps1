@@ -146,69 +146,6 @@ function New-Menu {
     return $result
 }
 
-function Show-MessageWindowAsync {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [string]
-        $Text
-    )
-    
-    process {
-        $scriptBlock = {
-            param($Msg)
-        
-            # Laden der benötigten .NET-Assemblies
-            Add-Type -AssemblyName System.Windows.Forms
-            Add-Type -AssemblyName System.Drawing
-        
-            # Neues Formular erzeugen
-            $form = New-Object System.Windows.Forms.Form
-            $form.Text = 'Wichtige Meldung'
-            $form.Width = 600
-            $form.Height = 200
-            $form.StartPosition = 'CenterScreen'
-            $form.FormBorderStyle = 'FixedDialog'
-            $form.MaximizeBox = $false
-            $form.MinimizeBox = $false
-            $form.ControlBox = $true
-            $form.Topmost = $true
-        
-            # Label erstellen
-            $label = New-Object System.Windows.Forms.Label
-            $label.Text = $Msg
-            $label.AutoSize = $true
-            $label.Location = New-Object System.Drawing.Point(20, 30)
-        
-            # "OK"-Button erstellen
-            $button = New-Object System.Windows.Forms.Button
-            $button.Text = "OK"
-            $button.Width = 80
-            $button.Height = 30
-            $button.Location = New-Object System.Drawing.Point(250, 100)
-
-            # Click-Ereignis für den "OK"-Button definieren
-            $button.Add_Click({
-                $form.Close()
-            })
-        
-            # Label und Button auf Formular platzieren
-            $form.Controls.Add($label)
-            $form.Controls.Add($button)
-        
-            # Fenster modal anzeigen, aber in EIGENEM Runspace (blockiert daher dein Hauptskript NICHT)
-            $form.ShowDialog() | Out-Null
-        }
-        
-        # Neuen PowerShell-Runspace erstellen, ScriptBlock hineinschicken und asynchron starten
-        $ps = [PowerShell]::Create()
-        $null = $ps.AddScript($scriptBlock)
-        $null = $ps.AddArgument($Text)
-        $asyncHandle = $ps.BeginInvoke()
-        # Das Skript läuft hier direkt weiter, während das Fenster schon angezeigt wird.
-    }
-}
-
 function Set-DenyShutdown {
     [CmdletBinding()]
     param (
@@ -447,12 +384,6 @@ if (Get-OfficeInstalled) {
         Log "Download-Link für ODT gefunden = $( $ODTUri.href )"
 
         try {
-            # Zeige Nachrichtenfenster, das informiert, den Computer nicht herunterzufahren
-            # Show-MessageWindowAsync -Text "Bitte den Computer nicht ausschalten.
-            # Es wird im Hintergrund von IT-Center Engels
-            # Microsoft Office und Microsoft Teams installiert
-            # Wir informieren Sie, wenn der Prozess abgeschlossen wurde."
-        
             Log "Verhindere Herunterfahren des Computers..."
             Set-DenyShutdown -Active $true -ErrorAction Continue
         
@@ -614,14 +545,13 @@ if (Get-OfficeInstalled) {
             Log "Starte Installation..."
             Start-OfficeSetup -Path $PathExeSetup -Type Configure
 
+            # Nur wenn alles erfolgreich durchgelaufen ist, wird der ExitCode auf 0 gesetzt
             $ExitCode = 0
         } catch {
             throw # rethrow error
         } finally {
             Log "Herunterfahren wieder erlauben..."
             Set-DenyShutdown -Active $false -ErrorAction Continue
-        
-            # Show-MessageWindowAsync -Text "Die Installation von Microsoft Office und Teams ist abgeschlossen. Ab jetzt koennen Sie auch wieder den Computer ausschalten."
         }
     }
     catch {
