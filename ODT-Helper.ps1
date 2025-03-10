@@ -551,6 +551,7 @@ if (Get-OfficeInstalled) {
                 <Product ID=`"$( $Apps )`">
                 <Language ID=`"de-de`" />
                 <ExcludeApp ID=`"Lync`" />
+                <ExcludeApp ID=`"Groove`" />
                 </Product>
                 $( $Visio )
                 $( $Publisher )
