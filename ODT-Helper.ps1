@@ -605,8 +605,8 @@ if (Get-OfficeInstalled) {
             $apiKeyUrl = "https://api.pushover.net/1/messages.json"
         
             switch ($ExitCode) {
-                0 { "Das Office Deployment Tool (ODT) wurde erfolgreich auf dem Computer $( $env:COMPUTERNAME ) installiert." }
-                1 { "Bei der Installation des  Office Deployment Tool (ODT) auf dem Computer $( $env:COMPUTERNAME ) ist folgender Fehler aufgetreten: $( $_.Exception.Message )" }
+                0 { $message = "Das Office Deployment Tool (ODT) wurde erfolgreich auf dem Computer $( $env:COMPUTERNAME ) installiert." }
+                1 { $message = "Bei der Installation des  Office Deployment Tool (ODT) auf dem Computer $( $env:COMPUTERNAME ) ist folgender Fehler aufgetreten: $( $_.Exception.Message )" }
             }
 
             $body = @{
