@@ -373,7 +373,8 @@ if ($null -eq $Interactive) {
 # $ResultPushOver = 0
 # $ApiToken = "API-Token"
 # $UserKey = "User-Key"
-# Interactive = "irgendetwas"
+# $Interactive = "irgendetwas"
+# $DenyShutdown = 0
 
 #endregion DECLARATIONS
 #region EXECUTION
@@ -406,8 +407,10 @@ if (Get-OfficeInstalled) {
         Log "Download-Link für ODT gefunden = $( $DownloadUrl )"
 
         try {
-            Log "Verhindere Herunterfahren des Computers..."
-            Set-DenyShutdown -Active $true -ErrorAction Continue
+            if ($DenyShutdown = 1) {
+                Log "Verhindere Herunterfahren des Computers..."
+                Set-DenyShutdown -Active $true -ErrorAction Continue
+            }
         
             # Überprüfen, ob der ODT-Ordner existiert
             Log "Überprüfen, ob der ODT-Ordner existiert..."
@@ -592,8 +595,10 @@ if (Get-OfficeInstalled) {
         } catch {
             throw # rethrow error
         } finally {
-            Log "Herunterfahren wieder erlauben..."
-            Set-DenyShutdown -Active $false -ErrorAction Continue
+            if ($DenyShutdown = 1) {
+                Log "Verhindere Herunterfahren des Computers..."
+                Set-DenyShutdown -Active $false -ErrorAction Continue
+            }
         }
     }
     catch {
